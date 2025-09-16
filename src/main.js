@@ -2,9 +2,134 @@ import { fetchCharacterImage, fetchGenres, getAnimeById, searchAnime } from './a
 import { WAIFUS, sortWaifuList, WAIFU_ATTRIBUTE_LABELS } from './data/waifus.js';
 import Icons from './icons.js';
 
+const THEME_PRESETS = [
+  {
+    id: 'naruto',
+    label: 'Naruto',
+    tagline: 'Leaf Village sunrise',
+    swatches: ['#ff9440', '#233d7b', '#ffd37d', '#1c1b2a'],
+    palette: {
+      '--app-background': 'radial-gradient(circle at 12% 12%, #fff1e0 0%, #ffd7b3 45%, #ffb38a 100%)',
+      '--surface': '#fff8ef',
+      '--surface-muted': '#ffe2c4',
+      '--surface-gradient': 'linear-gradient(160deg, rgba(255, 250, 242, 0.95) 0%, rgba(255, 220, 188, 0.9) 100%)',
+      '--accent': '#ff9440',
+      '--accent-strong': '#ef6722',
+      '--accent-soft': 'rgba(255, 148, 64, 0.22)',
+      '--text-main': '#261a17',
+      '--text-muted': '#7a5241',
+      '--border': '#f2bb8c',
+      '--border-strong': '#e98d45',
+      '--shadow-soft': '0 25px 60px rgba(251, 124, 32, 0.22)',
+      '--shadow-sharp': '0 12px 30px rgba(243, 120, 28, 0.32)',
+      '--hero-glow': 'rgba(255, 148, 64, 0.45)',
+      '--hero-glow-secondary': 'rgba(255, 196, 133, 0.35)',
+      '--focus-ring': 'rgba(255, 148, 64, 0.45)',
+    },
+  },
+  {
+    id: 'one-piece',
+    label: 'One Piece',
+    tagline: 'Treasure fleet skies',
+    swatches: ['#47c7ff', '#ffd73d', '#ff6f61', '#072149'],
+    palette: {
+      '--app-background': 'radial-gradient(circle at 20% 10%, #f0fbff 0%, #c9e9ff 42%, #fff4d6 100%)',
+      '--surface': '#ffffff',
+      '--surface-muted': '#e7f3ff',
+      '--surface-gradient': 'linear-gradient(160deg, rgba(255, 255, 255, 0.95) 0%, rgba(220, 236, 255, 0.9) 100%)',
+      '--accent': '#ffd73d',
+      '--accent-strong': '#ff8b6a',
+      '--accent-soft': 'rgba(71, 199, 255, 0.2)',
+      '--text-main': '#072149',
+      '--text-muted': '#4f6c8b',
+      '--border': '#bad9ff',
+      '--border-strong': '#6bb8ff',
+      '--shadow-soft': '0 25px 60px rgba(28, 128, 197, 0.18)',
+      '--shadow-sharp': '0 14px 32px rgba(71, 199, 255, 0.35)',
+      '--hero-glow': 'rgba(71, 199, 255, 0.38)',
+      '--hero-glow-secondary': 'rgba(255, 221, 61, 0.35)',
+      '--focus-ring': 'rgba(71, 199, 255, 0.45)',
+    },
+  },
+  {
+    id: 'dragon-ball',
+    label: 'Dragon Ball',
+    tagline: 'Super Saiyan charge',
+    swatches: ['#ff9a1f', '#3056ff', '#1ed27e', '#1f2233'],
+    palette: {
+      '--app-background': 'radial-gradient(circle at 10% 90%, #fff4dc 0%, #ffd289 45%, #f0edff 100%)',
+      '--surface': '#fff6eb',
+      '--surface-muted': '#ffe1bd',
+      '--surface-gradient': 'linear-gradient(160deg, rgba(255, 244, 219, 0.95) 0%, rgba(255, 217, 150, 0.9) 100%)',
+      '--accent': '#ff9a1f',
+      '--accent-strong': '#3056ff',
+      '--accent-soft': 'rgba(255, 154, 31, 0.24)',
+      '--text-main': '#1f2233',
+      '--text-muted': '#57566b',
+      '--border': '#f2bf81',
+      '--border-strong': '#d98b3a',
+      '--shadow-soft': '0 25px 60px rgba(255, 126, 27, 0.22)',
+      '--shadow-sharp': '0 14px 32px rgba(48, 86, 255, 0.28)',
+      '--hero-glow': 'rgba(255, 154, 31, 0.4)',
+      '--hero-glow-secondary': 'rgba(48, 86, 255, 0.3)',
+      '--focus-ring': 'rgba(48, 86, 255, 0.45)',
+    },
+  },
+  {
+    id: 'bleach',
+    label: 'Bleach',
+    tagline: 'Soul Society edge',
+    swatches: ['#101217', '#f56c3b', '#8fbbe8', '#f7efe6'],
+    palette: {
+      '--app-background': 'radial-gradient(circle at 85% 15%, #fff7ef 0%, #ffe0d1 40%, #d3e4ff 100%)',
+      '--surface': '#fffdf8',
+      '--surface-muted': '#f0f2f7',
+      '--surface-gradient': 'linear-gradient(160deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 244, 250, 0.95) 100%)',
+      '--accent': '#f56c3b',
+      '--accent-strong': '#0f1116',
+      '--accent-soft': 'rgba(245, 108, 59, 0.26)',
+      '--text-main': '#101217',
+      '--text-muted': '#596273',
+      '--border': '#d5dcea',
+      '--border-strong': '#a9b6cf',
+      '--shadow-soft': '0 24px 60px rgba(16, 18, 23, 0.18)',
+      '--shadow-sharp': '0 14px 32px rgba(245, 108, 59, 0.28)',
+      '--hero-glow': 'rgba(16, 18, 23, 0.45)',
+      '--hero-glow-secondary': 'rgba(245, 108, 59, 0.32)',
+      '--focus-ring': 'rgba(245, 108, 59, 0.45)',
+    },
+  },
+  {
+    id: 'attack-on-titan',
+    label: 'Attack on Titan',
+    tagline: 'Scout Regiment resolve',
+    swatches: ['#2f4636', '#8c6f52', '#d5c5ac', '#5d5f58'],
+    palette: {
+      '--app-background': 'radial-gradient(circle at 50% 100%, #f4f0e6 0%, #dcd3c2 45%, #c6d9cd 100%)',
+      '--surface': '#fdf9f0',
+      '--surface-muted': '#ece4d6',
+      '--surface-gradient': 'linear-gradient(160deg, rgba(253, 249, 240, 0.95) 0%, rgba(230, 222, 206, 0.9) 100%)',
+      '--accent': '#2f4636',
+      '--accent-strong': '#8c6f52',
+      '--accent-soft': 'rgba(47, 70, 54, 0.22)',
+      '--text-main': '#2b2d2a',
+      '--text-muted': '#5d5f58',
+      '--border': '#c6baa4',
+      '--border-strong': '#8c6f52',
+      '--shadow-soft': '0 24px 60px rgba(47, 70, 54, 0.18)',
+      '--shadow-sharp': '0 14px 32px rgba(140, 111, 82, 0.28)',
+      '--hero-glow': 'rgba(47, 70, 54, 0.45)',
+      '--hero-glow-secondary': 'rgba(158, 197, 161, 0.35)',
+      '--focus-ring': 'rgba(140, 111, 82, 0.45)',
+    },
+  },
+];
+
 class AniRankerApp {
   constructor(rootElement) {
     this.rootElement = rootElement;
+    this.themePresets = THEME_PRESETS.slice();
+    const initialTheme = this.themePresets.length > 0 ? this.themePresets[0].id : null;
     this.state = {
       searchTerm: '',
       anime: [],
@@ -31,7 +156,9 @@ class AniRankerApp {
       detailData: null,
       detailLoading: false,
       detailError: null,
+      activeTheme: initialTheme,
     };
+    this.themeSwitcherList = null;
 
     this.waifuTraits = Array.from(new Set(WAIFUS.flatMap((item) => item.traits || []))).sort((a, b) =>
       a.localeCompare(b)
@@ -54,6 +181,7 @@ class AniRankerApp {
 
     this.restoreRatings();
     this.createLayout();
+    this.applyTheme(this.state.activeTheme);
     this.render();
     this.loadGenres();
     this.scheduleAnimeSearch();
@@ -92,10 +220,44 @@ class AniRankerApp {
   }
 
   setState(updates) {
+    const previousTheme = this.state.activeTheme;
     this.state = Object.assign({}, this.state, updates);
+    if (this.state.activeTheme !== previousTheme) {
+      this.applyTheme(this.state.activeTheme);
+    }
     if (this.isMounted) {
       this.render();
     }
+  }
+
+  applyTheme(themeId) {
+    if (!this.themePresets || this.themePresets.length === 0) {
+      return;
+    }
+    const preset = this.themePresets.find((item) => item.id === themeId) || this.themePresets[0];
+    if (!preset || !preset.palette) {
+      return;
+    }
+    const root = document.documentElement;
+    Object.entries(preset.palette).forEach(([key, value]) => {
+      if (typeof value === 'string') {
+        root.style.setProperty(key, value);
+      }
+    });
+    if (document.body) {
+      document.body.dataset.theme = preset.id;
+    }
+  }
+
+  handleThemeChange(themeId) {
+    if (!themeId || themeId === this.state.activeTheme) {
+      return;
+    }
+    const exists = this.themePresets && this.themePresets.some((item) => item.id === themeId);
+    if (!exists) {
+      return;
+    }
+    this.setState({ activeTheme: themeId });
   }
 
   scheduleAnimeSearch() {
@@ -170,13 +332,25 @@ class AniRankerApp {
 
     const header = document.createElement('header');
     header.className = 'app__header';
+    const badge = document.createElement('span');
+    badge.className = 'app__header-badge';
+    badge.textContent = 'Big five chakra mode';
     const heading = document.createElement('h1');
     heading.textContent = 'AniRanker';
     const subtitle = document.createElement('p');
-    subtitle.textContent = 'Curate a personal library of the stories that move you.';
+    subtitle.textContent = 'Curate a personal anime library and let legendary arcs guide your rankings.';
+    const note = document.createElement('p');
+    note.className = 'app__header-note';
+    note.textContent =
+      'Blend AniRanker with iconic palettes from Naruto, One Piece, Dragon Ball, Bleach, and Attack on Titan.';
+    header.appendChild(badge);
     header.appendChild(heading);
     header.appendChild(subtitle);
+    header.appendChild(note);
     app.appendChild(header);
+
+    this.themeSwitcher = this.createThemeSwitcher();
+    app.appendChild(this.themeSwitcher);
 
     this.waifuSection = this.createWaifuSection();
     app.appendChild(this.waifuSection);
@@ -215,6 +389,30 @@ class AniRankerApp {
     document.body.appendChild(this.detailOverlay);
 
     this.isMounted = true;
+  }
+
+  createThemeSwitcher() {
+    const section = document.createElement('section');
+    section.className = 'theme-switcher surface-card';
+
+    const header = document.createElement('div');
+    header.className = 'theme-switcher__header';
+    const title = document.createElement('h2');
+    title.className = 'theme-switcher__title';
+    title.textContent = 'Big five aura themes';
+    const description = document.createElement('p');
+    description.className = 'theme-switcher__description';
+    description.textContent =
+      'Tap into Naruto, One Piece, Dragon Ball, Bleach, and Attack on Titan energy instantly.';
+    header.appendChild(title);
+    header.appendChild(description);
+    section.appendChild(header);
+
+    this.themeSwitcherList = document.createElement('div');
+    this.themeSwitcherList.className = 'theme-switcher__list';
+    section.appendChild(this.themeSwitcherList);
+
+    return section;
   }
 
   createWaifuSection() {
@@ -363,10 +561,55 @@ class AniRankerApp {
     return overlay;
   }
 
+  renderThemeSwitcher() {
+    if (!this.themeSwitcherList) {
+      return;
+    }
+    this.themeSwitcherList.innerHTML = '';
+    this.themePresets.forEach((preset) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = preset.id === this.state.activeTheme ? 'theme-chip theme-chip--active' : 'theme-chip';
+      button.dataset.theme = preset.id;
+      button.setAttribute('aria-pressed', preset.id === this.state.activeTheme ? 'true' : 'false');
+      button.setAttribute('aria-label', `Activate ${preset.label} theme`);
+      button.addEventListener('click', () => this.handleThemeChange(preset.id));
+
+      const title = document.createElement('span');
+      title.className = 'theme-chip__title';
+      title.textContent = preset.label;
+      const tagline = document.createElement('span');
+      tagline.className = 'theme-chip__tagline';
+      tagline.textContent = preset.tagline;
+      const swatches = document.createElement('span');
+      swatches.className = 'theme-chip__swatches';
+      (preset.swatches || []).forEach((color) => {
+        const swatch = document.createElement('span');
+        swatch.className = 'theme-chip__swatch';
+        swatch.style.setProperty('--swatch-color', color);
+        swatches.appendChild(swatch);
+      });
+
+      button.appendChild(title);
+      button.appendChild(tagline);
+      button.appendChild(swatches);
+
+      if (preset.id === this.state.activeTheme) {
+        const status = document.createElement('span');
+        status.className = 'theme-chip__status';
+        status.textContent = 'Live theme';
+        button.appendChild(status);
+      }
+
+      this.themeSwitcherList.appendChild(button);
+    });
+  }
+
   render() {
     if (!this.isMounted) {
       return;
     }
+    this.renderThemeSwitcher();
     this.renderWaifuSection();
     this.renderFilterControls();
     this.renderAnimeSection();

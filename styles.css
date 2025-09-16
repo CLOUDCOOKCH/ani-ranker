@@ -1,18 +1,24 @@
 :root {
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-  color: #161b22;
+  color: var(--text-main);
   background-color: #f5f5f2;
   line-height: 1.6;
   --surface: #ffffff;
   --surface-muted: #f0f1f1;
+  --surface-gradient: linear-gradient(160deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 246, 247, 0.92) 100%);
   --accent: #bfa67a;
   --accent-strong: #a48857;
+  --accent-soft: rgba(191, 166, 122, 0.18);
   --text-main: #161b22;
   --text-muted: #6c727f;
   --border: #d9dce1;
   --border-strong: #c0c4cc;
   --shadow-soft: 0 22px 55px rgba(17, 23, 32, 0.08);
   --shadow-sharp: 0 8px 24px rgba(17, 23, 32, 0.08);
+  --app-background: linear-gradient(135deg, #f7f7f4 0%, #edefef 45%, #fdfdfb 100%);
+  --hero-glow: rgba(191, 166, 122, 0.35);
+  --hero-glow-secondary: rgba(191, 166, 122, 0.18);
+  --focus-ring: rgba(191, 166, 122, 0.35);
 }
 
 * {
@@ -22,9 +28,72 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: linear-gradient(135deg, #f7f7f4 0%, #edefef 45%, #fdfdfb 100%);
+  background: var(--app-background);
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
+  transition: background 0.6s ease, color 0.4s ease;
+  position: relative;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: auto;
+  pointer-events: none;
+  border-radius: 50%;
+  filter: blur(0px);
+  opacity: 0.75;
+  z-index: -1;
+  background: radial-gradient(circle, var(--hero-glow) 0%, rgba(255, 255, 255, 0) 70%);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  animation: auraFloat 18s ease-in-out infinite alternate;
+}
+
+body::before {
+  width: min(680px, 65vw);
+  height: min(680px, 65vw);
+  top: -25vh;
+  left: -20vw;
+}
+
+body::after {
+  width: min(520px, 55vw);
+  height: min(520px, 55vw);
+  bottom: -18vh;
+  right: -25vw;
+  background: radial-gradient(circle, var(--hero-glow-secondary) 0%, rgba(255, 255, 255, 0) 70%);
+  animation-duration: 22s;
+}
+
+@keyframes auraFloat {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.65;
+  }
+  50% {
+    transform: translate3d(1%, -2%, 0) scale(1.05);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate3d(-2%, 3%, 0) scale(1.1);
+    opacity: 0.65;
+  }
+}
+
+@keyframes headerPulse {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.75;
+  }
+  50% {
+    transform: translate3d(3%, -2%, 0) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(-2%, 3%, 0) scale(1.03);
+    opacity: 0.7;
+  }
 }
 
 a {
@@ -33,32 +102,134 @@ a {
 }
 
 .app {
-  max-width: 1120px;
+  max-width: 1160px;
   margin: 0 auto;
-  padding: 3.5rem 1.5rem 4rem;
+  padding: 3.5rem 1.5rem 4.5rem;
   display: flex;
   flex-direction: column;
-  gap: 2.5rem;
+  gap: 2.75rem;
+  position: relative;
+  z-index: 1;
 }
 
 .app__header {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.9rem;
   text-align: center;
+  padding: 3rem 2.75rem;
+  border-radius: 32px;
+  border: 1px solid var(--border);
+  background: var(--surface-gradient);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+  isolation: isolate;
+  align-items: center;
+}
+
+.app__header::before,
+.app__header::after {
+  content: "";
+  position: absolute;
+  inset: auto;
+  border-radius: 50%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.8;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.app__header::before {
+  width: min(480px, 50vw);
+  height: min(480px, 50vw);
+  top: -30%;
+  right: -20%;
+  background: radial-gradient(circle at top, var(--hero-glow) 0%, rgba(255, 255, 255, 0) 70%);
+  animation: headerPulse 16s ease-in-out infinite alternate;
+}
+
+.app__header::after {
+  width: min(420px, 46vw);
+  height: min(420px, 46vw);
+  bottom: -25%;
+  left: -20%;
+  background: radial-gradient(circle at bottom, var(--hero-glow-secondary) 0%, rgba(255, 255, 255, 0) 70%);
+  animation: headerPulse 18s ease-in-out infinite alternate-reverse;
+}
+
+.app__header:hover::before,
+.app__header:hover::after {
+  opacity: 1;
+  transform: translate3d(0, -2%, 0) scale(1.05);
+}
+
+.app__header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  box-shadow: var(--shadow-sharp);
 }
 
 .app__header h1 {
   margin: 0;
-  font-weight: 600;
-  font-size: clamp(2.25rem, 4vw, 3rem);
+  font-weight: 700;
+  font-size: clamp(2.4rem, 5vw, 3.4rem);
   letter-spacing: -0.02em;
+  text-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
 }
 
 .app__header p {
   margin: 0;
   color: var(--text-muted);
   font-size: 1.05rem;
+  max-width: 620px;
+}
+
+.app__header-note {
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--text-muted) 90%, var(--accent) 10%);
+}
+
+.surface-card {
+  position: relative;
+  background: var(--surface-gradient);
+  border-radius: 26px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+  isolation: isolate;
+  transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, transform 0.35s ease;
+}
+
+.surface-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 65%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  opacity: 0.65;
+  transition: opacity 0.3s ease;
+}
+
+.surface-card:hover {
+  box-shadow: var(--shadow-sharp);
+  transform: translateY(-4px);
+}
+
+.surface-card:hover::before {
+  opacity: 0.85;
 }
 
 .surface-card {
@@ -74,24 +245,158 @@ a {
   gap: 0.45rem;
   padding: 0.6rem 1.15rem;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.7) 100%);
   font-size: 0.85rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+  transform: translateY(0);
+  box-shadow: 0 12px 24px rgba(15, 23, 32, 0.08);
+  transition: transform 0.25s ease, border-color 0.3s ease, box-shadow 0.3s ease, color 0.3s ease, background 0.3s ease;
 }
 
 .section-toggle:hover {
   border-color: var(--accent);
   color: var(--text-main);
   box-shadow: var(--shadow-sharp);
+  transform: translateY(-2px);
 }
 
 .section-toggle:focus-visible {
-  outline: 2px solid rgba(191, 166, 122, 0.35);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.theme-switcher {
+  padding: 1.95rem 2.25rem;
+  display: grid;
+  gap: 1.6rem;
+}
+
+.theme-switcher__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-align: center;
+  align-items: center;
+}
+
+.theme-switcher__title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.theme-switcher__description {
+  margin: 0;
+  color: color-mix(in srgb, var(--text-muted) 80%, var(--accent) 20%);
+  font-size: 0.95rem;
+  max-width: 520px;
+}
+
+.theme-switcher__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1.1rem;
+}
+
+.theme-chip {
+  position: relative;
+  display: grid;
+  gap: 0.65rem;
+  align-content: start;
+  padding: 1.1rem 1.2rem 1.25rem;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  background: color-mix(in srgb, var(--surface) 88%, rgba(255, 255, 255, 0.08) 12%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 35px rgba(17, 23, 32, 0.12);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  transition: transform 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, background 0.35s ease;
+}
+
+.theme-chip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 70%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+
+.theme-chip__title {
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+.theme-chip__tagline {
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--text-muted) 88%, var(--accent) 12%);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.theme-chip__swatches {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.theme-chip__swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--swatch-color, var(--accent));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.65), 0 4px 12px rgba(17, 23, 32, 0.22);
+  transition: transform 0.3s ease;
+}
+
+.theme-chip__status {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 65%, var(--text-muted) 35%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.theme-chip:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sharp);
+}
+
+.theme-chip:hover::after {
+  opacity: 1;
+}
+
+.theme-chip:hover .theme-chip__swatch {
+  transform: scale(1.05);
+}
+
+.theme-chip--active {
+  border-color: var(--accent);
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--surface) 85%, var(--accent-soft) 15%) 0%,
+      color-mix(in srgb, var(--surface) 65%, var(--accent-soft) 35%) 100%);
+  box-shadow: var(--shadow-sharp);
+  transform: translateY(-6px);
+}
+
+.theme-chip--active::after {
+  opacity: 1;
+}
+
+.theme-chip:focus-visible {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
@@ -130,12 +435,20 @@ a {
 .waifu-selector__preview-card {
   padding: 1.1rem;
   border-radius: 20px;
-  background: var(--surface-muted);
+  background: color-mix(in srgb, var(--surface) 92%, var(--accent-soft) 8%);
   display: flex;
   gap: 1.1rem;
   align-items: stretch;
-  border: 1px solid rgba(22, 27, 34, 0.08);
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
   grid-column: 1 / -1;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transition: transform 0.35s ease, background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.waifu-selector__preview-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sharp);
 }
 
 .waifu-selector__preview-image {
@@ -143,6 +456,11 @@ a {
   border-radius: 16px;
   object-fit: cover;
   box-shadow: var(--shadow-sharp);
+  transition: transform 0.4s ease;
+}
+
+.waifu-selector__preview-card:hover .waifu-selector__preview-image {
+  transform: translateY(-4px);
 }
 
 .waifu-selector__preview-placeholder {
@@ -221,8 +539,12 @@ a {
   gap: 1.2rem;
   padding: 1rem 1.25rem;
   border-radius: 18px;
-  border: 1px solid rgba(22, 27, 34, 0.08);
-  background: rgba(15, 23, 32, 0.04);
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  background: linear-gradient(145deg,
+      color-mix(in srgb, var(--surface) 88%, var(--accent-soft) 12%) 0%,
+      color-mix(in srgb, var(--surface) 95%, rgba(255, 255, 255, 0.85) 5%) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
 }
 
 .waifu-selector__controls {
@@ -282,19 +604,24 @@ a {
 .trait-chip {
   padding: 0.45rem 0.85rem;
   border-radius: 999px;
-  border: 1px solid transparent;
-  background: var(--surface-muted);
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--surface) 88%, var(--accent-soft) 12%) 0%,
+      color-mix(in srgb, var(--surface) 82%, rgba(255, 255, 255, 0.85) 18%) 100%);
   font-size: 0.85rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.3s ease, background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, color 0.35s ease;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transform: translateY(0);
 }
 
 .trait-chip:hover {
   border-color: var(--accent);
   color: var(--text-main);
+  transform: translateY(-2px);
 }
 
 .trait-chip--active {
@@ -302,6 +629,7 @@ a {
   color: #ffffff;
   border-color: var(--text-main);
   box-shadow: var(--shadow-sharp);
+  transform: translateY(-3px);
 }
 
 .waifu-selector__gallery {
@@ -325,9 +653,11 @@ a {
 }
 
 .waifu-pill {
-  border: 1px solid transparent;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   border-radius: 999px;
-  background: var(--surface-muted);
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--surface) 90%, var(--accent-soft) 10%) 0%,
+      color-mix(in srgb, var(--surface) 85%, rgba(255, 255, 255, 0.85) 15%) 100%);
   color: var(--text-main);
   display: inline-flex;
   align-items: center;
@@ -335,8 +665,9 @@ a {
   padding: 0.55rem 1.1rem;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: none;
+  transition: transform 0.3s ease, background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, color 0.35s ease;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transform: translateY(0);
 }
 
 .waifu-pill strong {
@@ -357,6 +688,7 @@ a {
 .waifu-pill:hover {
   border-color: var(--accent);
   box-shadow: var(--shadow-sharp);
+  transform: translateY(-3px);
 }
 
 .waifu-pill--active {
@@ -364,6 +696,7 @@ a {
   color: #ffffff;
   border-color: var(--text-main);
   box-shadow: var(--shadow-sharp);
+  transform: translateY(-3px);
 }
 
 .waifu-pill--active span,
@@ -373,15 +706,11 @@ a {
 
 button.waifu-pill {
   border: none;
-  background: var(--surface-muted);
-}
-
-button.waifu-pill.waifu-pill--active {
-  background: var(--text-main);
+  background: none;
 }
 
 button.waifu-pill:focus-visible {
-  outline: 2px solid rgba(191, 166, 122, 0.35);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
@@ -431,7 +760,7 @@ button.waifu-pill:focus-visible {
 .input-shell__control:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(191, 166, 122, 0.15);
+  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 .select-shell {
@@ -452,7 +781,7 @@ button.waifu-pill:focus-visible {
 .select-shell select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(191, 166, 122, 0.15);
+  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 .select-shell__icon,
@@ -495,17 +824,22 @@ button.waifu-pill:focus-visible {
   gap: 0.45rem;
   padding: 0.55rem 1rem;
   border-radius: 999px;
-  border: 1px solid transparent;
-  background: #eef0f0;
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--surface) 88%, var(--accent-soft) 12%) 0%,
+      color-mix(in srgb, var(--surface) 82%, rgba(255, 255, 255, 0.85) 18%) 100%);
   color: var(--text-muted);
   font-size: 0.9rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.3s ease, background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, color 0.35s ease;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transform: translateY(0);
 }
 
 .chip:hover {
   border-color: var(--accent);
   color: var(--text-main);
+  transform: translateY(-3px);
 }
 
 .chip--active {
@@ -513,11 +847,22 @@ button.waifu-pill:focus-visible {
   color: #ffffff;
   border-color: var(--text-main);
   box-shadow: var(--shadow-sharp);
+  transform: translateY(-3px);
 }
 
 .chip__icon {
   width: 16px;
   height: 16px;
+  color: var(--accent);
+  transition: color 0.3s ease;
+}
+
+.chip:hover .chip__icon {
+  color: var(--accent-strong);
+}
+
+.chip--active .chip__icon {
+  color: #ffffff;
 }
 
 .chip input {
@@ -543,15 +888,18 @@ button.waifu-pill:focus-visible {
   flex-direction: column;
   overflow: hidden;
   border-radius: 24px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: linear-gradient(160deg,
+      color-mix(in srgb, var(--surface) 92%, var(--accent-soft) 8%) 0%,
+      color-mix(in srgb, var(--surface) 86%, rgba(255, 255, 255, 0.85) 14%) 100%);
   box-shadow: var(--shadow-soft);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition: transform 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease, background 0.35s ease;
 }
 
 .anime-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 28px 60px rgba(17, 23, 32, 0.12);
+  transform: translateY(-8px);
+  box-shadow: 0 32px 70px rgba(17, 23, 32, 0.2);
+  border-color: var(--accent);
 }
 
 .anime-card__cover {
@@ -559,6 +907,8 @@ button.waifu-pill:focus-visible {
   padding: 0;
   background: none;
   cursor: pointer;
+  overflow: hidden;
+  position: relative;
 }
 
 .anime-card__cover img {
@@ -566,6 +916,11 @@ button.waifu-pill:focus-visible {
   width: 100%;
   aspect-ratio: 3 / 4;
   object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.anime-card:hover .anime-card__cover img {
+  transform: scale(1.05);
 }
 
 .anime-card__placeholder {
@@ -603,9 +958,12 @@ button.waifu-pill:focus-visible {
   gap: 0.4rem;
   padding: 0.45rem 0.7rem;
   border-radius: 999px;
-  background: var(--surface-muted);
-  color: var(--text-muted);
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--surface) 90%, var(--accent-soft) 10%) 0%,
+      color-mix(in srgb, var(--surface) 85%, rgba(255, 255, 255, 0.85) 15%) 100%);
+  color: color-mix(in srgb, var(--text-muted) 90%, var(--accent) 10%);
   font-size: 0.85rem;
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 .metric__icon {
@@ -626,7 +984,18 @@ button.waifu-pill:focus-visible {
   gap: 0.75rem;
   padding: 0.95rem 1.15rem;
   border-radius: 18px;
-  background: var(--surface-muted);
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--surface) 92%, var(--accent-soft) 8%) 0%,
+      color-mix(in srgb, var(--surface) 86%, rgba(255, 255, 255, 0.85) 14%) 100%);
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transition: transform 0.35s ease, background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.rating-control:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sharp);
 }
 
 .rating-control__label {
@@ -679,7 +1048,7 @@ button.waifu-pill:focus-visible {
 }
 
 .star-button:focus-visible {
-  outline: 2px solid rgba(191, 166, 122, 0.4);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
@@ -712,23 +1081,31 @@ button.waifu-pill:focus-visible {
   font-weight: 600;
   font-size: 0.95rem;
   letter-spacing: 0.02em;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease, color 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  transform: translateY(0);
 }
 
 .button--primary {
-  background: var(--text-main);
+  background: linear-gradient(135deg, var(--text-main) 0%, color-mix(in srgb, var(--text-main) 70%, var(--accent-strong) 30%) 100%);
   color: #ffffff;
   box-shadow: var(--shadow-sharp);
 }
 
 .button--primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 25px rgba(17, 23, 32, 0.16);
+  transform: translateY(-3px);
+  box-shadow: 0 20px 32px rgba(17, 23, 32, 0.24);
 }
 
 .button__icon {
   width: 16px;
   height: 16px;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
 .status-message {
@@ -744,12 +1121,13 @@ button.waifu-pill:focus-visible {
 .detail-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(12, 18, 26, 0.55);
+  background: color-mix(in srgb, rgba(12, 18, 26, 0.75) 70%, var(--hero-glow) 30%);
   display: grid;
   place-items: center;
   padding: 2rem;
   backdrop-filter: blur(8px);
   z-index: 20;
+  animation: overlayFade 0.45s ease;
 }
 
 .detail-modal {
@@ -757,8 +1135,8 @@ button.waifu-pill:focus-visible {
   max-width: 860px;
   width: min(860px, 100%);
   border-radius: 28px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 80%, transparent);
+  background: var(--surface-gradient);
   box-shadow: 0 30px 65px rgba(10, 14, 20, 0.35);
   padding: 2.5rem 2.75rem;
   display: flex;
@@ -766,6 +1144,7 @@ button.waifu-pill:focus-visible {
   gap: 1.9rem;
   max-height: 90vh;
   overflow-y: auto;
+  animation: modalRise 0.45s ease;
 }
 
 .detail-modal__close {
@@ -848,6 +1227,37 @@ button.waifu-pill:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
+}
+
+@keyframes overlayFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalRise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 28px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 .detail-modal__waifu-list .waifu-pill {
