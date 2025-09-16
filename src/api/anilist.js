@@ -1,4 +1,5 @@
 import { ANIME } from '../data/anime.js';
+import { createPortraitPlaceholder } from '../utils/placeholders.js';
 
 const imageCache = new Map();
 
@@ -64,7 +65,7 @@ export async function fetchCharacterImage(name) {
     return imageCache.get(name);
   }
 
-  const placeholder = `https://placehold.co/256x256?text=${encodeURIComponent(name)}`;
+  const placeholder = createPortraitPlaceholder(name);
   imageCache.set(name, placeholder);
   return placeholder;
 }

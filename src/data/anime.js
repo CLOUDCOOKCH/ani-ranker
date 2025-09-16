@@ -1,4 +1,6 @@
-const cover = (text) => `https://placehold.co/300x450?text=${encodeURIComponent(text)}`;
+import { createCoverPlaceholder } from '../utils/placeholders.js';
+
+const cover = (text) => createCoverPlaceholder(text);
 
 export const ANIME = [
   {
