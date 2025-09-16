@@ -1,16 +1,16 @@
 # AniRanker Static Site
 
-AniRanker is a purely static React experience that can be hosted anywhere GitHub Pages can serve HTML, CSS, and JavaScript files. All data used by the interface is bundled directly into the repository, so no server-side runtime or build tooling is required.
+AniRanker is a purely static experience built with modern browser APIs that can be hosted anywhere GitHub Pages can serve HTML, CSS, and JavaScript files. All data used by the interface is bundled directly into the repository, so no server-side runtime or build tooling is required.
 
 ## Project structure
 
 ```
 .
-├── index.html        # Entry point that loads React from a CDN and mounts the app
+├── index.html        # Entry point that loads the vanilla JS application
 ├── styles.css        # Global styles for the entire experience
 └── src/
     ├── api/          # Local mock implementations that provide data to the UI
-    ├── components/   # React components written without a build step
+    ├── icons.js      # Lightweight SVG icon helpers
     ├── data/         # Curated anime and waifu data sets served from static JS modules
     └── utils/        # Shared helpers, e.g. SVG placeholder generators
 ```

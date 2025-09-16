@@ -1,7 +1,1223 @@
-import App from './components/App.js';
+import { fetchCharacterImage, fetchGenres, getAnimeById, searchAnime } from './api/anilist.js';
+import { WAIFUS, sortWaifuList, WAIFU_ATTRIBUTE_LABELS } from './data/waifus.js';
+import Icons from './icons.js';
 
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(React.createElement(App));
+class AniRankerApp {
+  constructor(rootElement) {
+    this.rootElement = rootElement;
+    this.state = {
+      searchTerm: '',
+      anime: [],
+      isLoading: false,
+      error: null,
+      genreOptions: [],
+      selectedGenres: [],
+      sortBy: 'POPULARITY',
+      ratings: {},
+      waifuSelection: '',
+      waifuSortKey: 'grace',
+      waifuSortDirection: 'desc',
+      waifuTraitFilters: [],
+      waifuHairFilters: [],
+      waifuSkinFilters: [],
+      waifuChestFilters: [],
+      showAllWaifus: false,
+      waifuFiltersOpen: false,
+      animeFiltersOpen: false,
+      selectedWaifuImage: null,
+      selectedWaifuImageLoading: false,
+      selectedWaifuImageError: null,
+      detailId: null,
+      detailData: null,
+      detailLoading: false,
+      detailError: null,
+    };
+
+    this.waifuTraits = Array.from(new Set(WAIFUS.flatMap((item) => item.traits || []))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    this.waifuHairColors = Array.from(new Set(WAIFUS.map((item) => item.hairColor))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    this.waifuSkinTones = Array.from(new Set(WAIFUS.map((item) => item.skinTone))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    this.waifuChestSizes = Array.from(new Set(WAIFUS.map((item) => item.chest))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+
+    this.pendingSearch = null;
+    this.activeSearchToken = null;
+    this.activeDetailToken = null;
+    this.waifuImageRequestId = 0;
+    this.isMounted = false;
+
+    this.restoreRatings();
+    this.createLayout();
+    this.render();
+    this.loadGenres();
+    this.scheduleAnimeSearch();
+    this.bindGlobalEvents();
+  }
+
+  bindGlobalEvents() {
+    this.handleKeyDown = (event) => {
+      if (event.key === 'Escape' && this.state.detailId != null) {
+        this.closeDetails();
+      }
+    };
+    document.addEventListener('keydown', this.handleKeyDown);
+  }
+
+  restoreRatings() {
+    try {
+      const stored = window.localStorage.getItem('ani-ranker-ratings');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed === 'object') {
+          this.state.ratings = parsed;
+        }
+      }
+    } catch (error) {
+      console.warn('Unable to restore saved ratings', error);
+    }
+  }
+
+  saveRatings(ratings) {
+    try {
+      window.localStorage.setItem('ani-ranker-ratings', JSON.stringify(ratings));
+    } catch (error) {
+      console.warn('Failed to persist ratings', error);
+    }
+  }
+
+  setState(updates) {
+    this.state = Object.assign({}, this.state, updates);
+    if (this.isMounted) {
+      this.render();
+    }
+  }
+
+  scheduleAnimeSearch() {
+    if (this.pendingSearch) {
+      window.clearTimeout(this.pendingSearch);
+    }
+    this.pendingSearch = window.setTimeout(() => {
+      this.pendingSearch = null;
+      this.performAnimeSearch();
+    }, 320);
+  }
+
+  performAnimeSearch() {
+    const query = this.state.searchTerm;
+    const genres = this.state.selectedGenres.slice();
+    const token = Symbol('search');
+    this.activeSearchToken = token;
+
+    this.setState({ isLoading: true, error: null });
+
+    searchAnime(query, { perPage: 24, genres })
+      .then((results) => {
+        if (this.activeSearchToken !== token) {
+          return;
+        }
+        const list = Array.isArray(results) ? results : [];
+        this.setState({ anime: list, isLoading: false });
+        this.maybeDeriveGenres(list);
+      })
+      .catch((error) => {
+        if (this.activeSearchToken !== token) {
+          return;
+        }
+        console.error(error);
+        const message = error instanceof Error ? error.message : 'Failed to fetch anime';
+        this.setState({ error: message, isLoading: false });
+      });
+  }
+
+  loadGenres() {
+    fetchGenres()
+      .then((genres) => {
+        if (Array.isArray(genres) && genres.length > 0) {
+          const list = genres.slice().sort((a, b) => a.localeCompare(b));
+          this.setState({ genreOptions: list });
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load genres', error);
+      });
+  }
+
+  maybeDeriveGenres(animeList) {
+    if (this.state.genreOptions && this.state.genreOptions.length > 0) {
+      return;
+    }
+    const derived = Array.from(
+      new Set(
+        (animeList || []).flatMap((item) => (Array.isArray(item.genres) ? item.genres : []))
+      )
+    ).sort((a, b) => a.localeCompare(b));
+    if (derived.length > 0) {
+      this.setState({ genreOptions: derived });
+    }
+  }
+
+  createLayout() {
+    const app = document.createElement('div');
+    app.className = 'app';
+    this.rootElement.innerHTML = '';
+    this.rootElement.appendChild(app);
+
+    const header = document.createElement('header');
+    header.className = 'app__header';
+    const heading = document.createElement('h1');
+    heading.textContent = 'AniRanker';
+    const subtitle = document.createElement('p');
+    subtitle.textContent = 'Curate a personal library of the stories that move you.';
+    header.appendChild(heading);
+    header.appendChild(subtitle);
+    app.appendChild(header);
+
+    this.waifuSection = this.createWaifuSection();
+    app.appendChild(this.waifuSection);
+
+    this.animeFilterToggle = document.createElement('button');
+    this.animeFilterToggle.type = 'button';
+    this.animeFilterToggle.className = 'section-toggle';
+    this.animeFilterToggle.addEventListener('click', () => this.toggleAnimeFilters());
+    app.appendChild(this.animeFilterToggle);
+
+    this.filterBar = this.createFilterBar();
+    app.appendChild(this.filterBar);
+
+    const main = document.createElement('main');
+    this.loadingMessage = document.createElement('p');
+    this.loadingMessage.className = 'status-message';
+    this.loadingMessage.textContent = 'Loading selections...';
+    main.appendChild(this.loadingMessage);
+
+    this.errorMessage = document.createElement('p');
+    this.errorMessage.className = 'status-message error';
+    main.appendChild(this.errorMessage);
+
+    this.emptyMessage = document.createElement('p');
+    this.emptyMessage.className = 'status-message';
+    this.emptyMessage.textContent = 'No titles match yet. Try adjusting your filters.';
+    main.appendChild(this.emptyMessage);
+
+    this.animeGrid = document.createElement('section');
+    this.animeGrid.className = 'anime-grid';
+    main.appendChild(this.animeGrid);
+
+    app.appendChild(main);
+
+    this.detailOverlay = this.createDetailOverlay();
+    document.body.appendChild(this.detailOverlay);
+
+    this.isMounted = true;
+  }
+
+  createWaifuSection() {
+    const section = document.createElement('section');
+    section.className = 'waifu-selector surface-card';
+
+    const header = document.createElement('div');
+    header.className = 'waifu-selector__header';
+    const title = document.createElement('h2');
+    title.className = 'waifu-selector__title';
+    title.textContent = 'Signature muses';
+    const subtitle = document.createElement('p');
+    subtitle.className = 'waifu-selector__subtitle';
+    subtitle.textContent = 'Choose a muse to open her series or tailor the roster to your taste.';
+    this.waifuFilterToggle = document.createElement('button');
+    this.waifuFilterToggle.type = 'button';
+    this.waifuFilterToggle.className = 'section-toggle';
+    this.waifuFilterToggle.addEventListener('click', () => this.toggleWaifuFilters());
+    header.appendChild(title);
+    header.appendChild(subtitle);
+    header.appendChild(this.waifuFilterToggle);
+    section.appendChild(header);
+
+    this.waifuPreview = document.createElement('div');
+    this.waifuPreview.className = 'waifu-selector__preview';
+    section.appendChild(this.waifuPreview);
+
+    this.waifuFiltersContainer = document.createElement('div');
+    this.waifuFiltersContainer.className = 'waifu-selector__filters';
+    section.appendChild(this.waifuFiltersContainer);
+
+    this.waifuEmptyMessage = document.createElement('p');
+    this.waifuEmptyMessage.className = 'waifu-selector__empty';
+    section.appendChild(this.waifuEmptyMessage);
+
+    this.waifuGallery = document.createElement('div');
+    this.waifuGallery.className = 'waifu-selector__gallery';
+    section.appendChild(this.waifuGallery);
+
+    this.waifuShowMoreButton = document.createElement('button');
+    this.waifuShowMoreButton.type = 'button';
+    this.waifuShowMoreButton.className = 'waifu-selector__show-more section-toggle';
+    this.waifuShowMoreButton.addEventListener('click', () => this.toggleShowAllWaifus());
+    section.appendChild(this.waifuShowMoreButton);
+
+    const note = document.createElement('p');
+    note.className = 'waifu-selector__note';
+    note.textContent = 'Tap a muse or pick from the list to open her series instantly.';
+    section.appendChild(note);
+
+    return section;
+  }
+
+  createFilterBar() {
+    const section = document.createElement('section');
+    section.className = 'filter-bar surface-card';
+
+    const searchField = document.createElement('div');
+    searchField.className = 'field';
+    const searchLabel = document.createElement('span');
+    searchLabel.className = 'field__label';
+    searchLabel.textContent = 'Search';
+    const searchShell = document.createElement('div');
+    searchShell.className = 'input-shell';
+    const searchIcon = Icons.Search({ className: 'input-shell__icon', 'aria-hidden': 'true' });
+    this.searchInput = document.createElement('input');
+    this.searchInput.type = 'search';
+    this.searchInput.className = 'input-shell__control';
+    this.searchInput.placeholder = 'Search by title or keyword';
+    this.searchInput.addEventListener('input', (event) => this.handleSearchChange(event.target.value));
+    searchShell.appendChild(searchIcon);
+    searchShell.appendChild(this.searchInput);
+    searchField.appendChild(searchLabel);
+    searchField.appendChild(searchShell);
+
+    const sortField = document.createElement('div');
+    sortField.className = 'field';
+    const sortLabel = document.createElement('span');
+    sortLabel.className = 'field__label';
+    sortLabel.textContent = 'Sort';
+    const sortShell = document.createElement('div');
+    sortShell.className = 'select-shell';
+    const sortIcon = Icons.Sort({ className: 'select-shell__icon', 'aria-hidden': 'true' });
+    const sortChevron = Icons.Chevron({ className: 'select-shell__chevron', 'aria-hidden': 'true' });
+    this.sortSelect = document.createElement('select');
+    this.sortSelect.addEventListener('change', (event) => this.handleSortChange(event.target.value));
+    const sortOptions = [
+      { value: 'POPULARITY', label: 'Popularity' },
+      { value: 'AVERAGE_SCORE', label: 'Average score' },
+      { value: 'MY_RATING', label: 'My rating' },
+    ];
+    for (const option of sortOptions) {
+      const element = document.createElement('option');
+      element.value = option.value;
+      element.textContent = option.label;
+      this.sortSelect.appendChild(element);
+    }
+    sortShell.appendChild(sortIcon);
+    sortShell.appendChild(this.sortSelect);
+    sortShell.appendChild(sortChevron);
+    sortField.appendChild(sortLabel);
+    sortField.appendChild(sortShell);
+
+    const genresField = document.createElement('div');
+    genresField.className = 'filter-bar__genres field';
+    const genresLabel = document.createElement('span');
+    genresLabel.className = 'field__label';
+    genresLabel.textContent = 'Genres';
+    this.genreChipList = document.createElement('div');
+    this.genreChipList.className = 'chip-list';
+    genresField.appendChild(genresLabel);
+    genresField.appendChild(this.genreChipList);
+
+    section.appendChild(searchField);
+    section.appendChild(sortField);
+    section.appendChild(genresField);
+    return section;
+  }
+
+  createDetailOverlay() {
+    const overlay = document.createElement('div');
+    overlay.className = 'detail-overlay';
+    overlay.style.display = 'none';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        this.closeDetails();
+      }
+    });
+
+    this.detailModal = document.createElement('div');
+    this.detailModal.className = 'detail-modal';
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'detail-modal__close';
+    closeButton.setAttribute('aria-label', 'Close details');
+    closeButton.appendChild(Icons.Close({ width: 18, height: 18 }));
+    closeButton.addEventListener('click', () => this.closeDetails());
+    this.detailModal.appendChild(closeButton);
+
+    this.detailContent = document.createElement('div');
+    this.detailModal.appendChild(this.detailContent);
+    overlay.appendChild(this.detailModal);
+
+    return overlay;
+  }
+
+  render() {
+    if (!this.isMounted) {
+      return;
+    }
+    this.renderWaifuSection();
+    this.renderFilterControls();
+    this.renderAnimeSection();
+    this.renderDetailModal();
+  }
+
+  renderWaifuSection() {
+    this.waifuFilterToggle.textContent = this.state.waifuFiltersOpen
+      ? 'Hide waifu filters'
+      : 'Refine waifu list';
+
+    this.renderWaifuPreview();
+    this.renderWaifuFilters();
+    this.renderWaifuGallery();
+  }
+
+  getFilteredWaifus() {
+    let list = WAIFUS.slice();
+    if (this.state.waifuTraitFilters.length > 0) {
+      list = list.filter((item) =>
+        this.state.waifuTraitFilters.every((trait) => item.traits && item.traits.includes(trait))
+      );
+    }
+    if (this.state.waifuHairFilters.length > 0) {
+      list = list.filter((item) => this.state.waifuHairFilters.includes(item.hairColor));
+    }
+    if (this.state.waifuSkinFilters.length > 0) {
+      list = list.filter((item) => this.state.waifuSkinFilters.includes(item.skinTone));
+    }
+    if (this.state.waifuChestFilters.length > 0) {
+      list = list.filter((item) => this.state.waifuChestFilters.includes(item.chest));
+    }
+    return sortWaifuList(list, this.state.waifuSortKey, this.state.waifuSortDirection);
+  }
+
+  getVisibleWaifus(filteredList) {
+    const filtersActive =
+      this.state.waifuTraitFilters.length > 0 ||
+      this.state.waifuHairFilters.length > 0 ||
+      this.state.waifuSkinFilters.length > 0 ||
+      this.state.waifuChestFilters.length > 0;
+    if (filtersActive || this.state.showAllWaifus) {
+      return filteredList;
+    }
+    const featured = filteredList.filter((item) => item.featured);
+    return featured.length > 0 ? featured : filteredList;
+  }
+
+  getSelectedWaifu() {
+    if (!this.state.waifuSelection) {
+      return null;
+    }
+    return WAIFUS.find((item) => item.name === this.state.waifuSelection) || null;
+  }
+
+  renderWaifuPreview() {
+    this.waifuPreview.innerHTML = '';
+    const selectedWaifu = this.getSelectedWaifu();
+    if (!selectedWaifu) {
+      const empty = document.createElement('div');
+      empty.className = 'waifu-selector__preview-empty';
+      empty.textContent = 'Select a muse to see her spotlight.';
+      this.waifuPreview.appendChild(empty);
+      return;
+    }
+
+    const card = document.createElement('div');
+    card.className = 'waifu-selector__preview-card';
+
+    if (this.state.selectedWaifuImageLoading) {
+      const loading = document.createElement('p');
+      loading.className = 'waifu-selector__status';
+      loading.textContent = 'Fetching portrait...';
+      card.appendChild(loading);
+    } else if (this.state.selectedWaifuImageError) {
+      const error = document.createElement('p');
+      error.className = 'waifu-selector__status error';
+      error.textContent = this.state.selectedWaifuImageError;
+      card.appendChild(error);
+    } else if (this.state.selectedWaifuImage) {
+      const image = document.createElement('img');
+      image.src = this.state.selectedWaifuImage;
+      image.alt = selectedWaifu.name;
+      image.className = 'waifu-selector__preview-image';
+      card.appendChild(image);
+    } else {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'waifu-selector__preview-placeholder';
+      placeholder.textContent = 'No portrait available';
+      card.appendChild(placeholder);
+    }
+
+    const content = document.createElement('div');
+    content.className = 'waifu-selector__preview-content';
+    const name = document.createElement('h3');
+    name.textContent = selectedWaifu.name;
+    const series = document.createElement('p');
+    series.textContent = selectedWaifu.animeTitle;
+    const meta = document.createElement('p');
+    meta.className = 'waifu-selector__preview-meta';
+    meta.textContent = `${selectedWaifu.hairColor} hair · ${selectedWaifu.skinTone} skin · ${selectedWaifu.chest}`;
+    const traits = document.createElement('div');
+    traits.className = 'waifu-selector__preview-traits';
+    selectedWaifu.traits.forEach((trait) => {
+      const pill = document.createElement('span');
+      pill.textContent = trait;
+      traits.appendChild(pill);
+    });
+    content.appendChild(name);
+    content.appendChild(series);
+    content.appendChild(meta);
+    content.appendChild(traits);
+    card.appendChild(content);
+
+    this.waifuPreview.appendChild(card);
+  }
+
+  renderWaifuFilters() {
+    if (!this.state.waifuFiltersOpen) {
+      this.waifuFiltersContainer.innerHTML = '';
+      this.waifuFiltersContainer.style.display = 'none';
+      return;
+    }
+
+    this.waifuFiltersContainer.style.display = 'grid';
+    this.waifuFiltersContainer.innerHTML = '';
+
+    const controls = document.createElement('div');
+    controls.className = 'waifu-selector__controls';
+
+    const sortField = document.createElement('div');
+    sortField.className = 'field';
+    const sortLabel = document.createElement('span');
+    sortLabel.className = 'field__label';
+    sortLabel.textContent = 'Sort muses';
+    const sortShell = document.createElement('div');
+    sortShell.className = 'select-shell';
+    const sortIcon = Icons.Sort({ className: 'select-shell__icon', 'aria-hidden': 'true' });
+    const sortSelect = document.createElement('select');
+    const sortOptions = [
+      { value: 'grace', label: 'Grace' },
+      { value: 'intensity', label: 'Intensity' },
+      { value: 'warmth', label: 'Warmth' },
+      { value: 'mystique', label: 'Mystique' },
+      { value: 'name', label: 'Name' },
+    ];
+    sortOptions.forEach((option) => {
+      const element = document.createElement('option');
+      element.value = option.value;
+      element.textContent = option.label;
+      sortSelect.appendChild(element);
+    });
+    sortSelect.value = this.state.waifuSortKey;
+    sortSelect.addEventListener('change', (event) => this.setState({ waifuSortKey: event.target.value }));
+    const sortChevron = Icons.Chevron({ className: 'select-shell__chevron', 'aria-hidden': 'true' });
+    sortShell.appendChild(sortIcon);
+    sortShell.appendChild(sortSelect);
+    sortShell.appendChild(sortChevron);
+    sortField.appendChild(sortLabel);
+    sortField.appendChild(sortShell);
+    controls.appendChild(sortField);
+
+    const direction = document.createElement('div');
+    direction.className = 'waifu-selector__direction';
+    const directionButton = document.createElement('button');
+    directionButton.type = 'button';
+    directionButton.appendChild(Icons.ArrowUpDown({ 'aria-hidden': 'true' }));
+    directionButton.appendChild(
+      document.createTextNode(
+        this.state.waifuSortDirection === 'asc' ? 'Ascending' : 'Descending'
+      )
+    );
+    directionButton.addEventListener('click', () => this.toggleWaifuSortDirection());
+    direction.appendChild(directionButton);
+    controls.appendChild(direction);
+
+    this.waifuFiltersContainer.appendChild(controls);
+
+    const traitSections = [
+      {
+        label: 'Traits',
+        items: this.waifuTraits,
+        active: this.state.waifuTraitFilters,
+        onToggle: (value) => this.toggleFilterValue('waifuTraitFilters', value),
+        onClear: () => this.clearFilterValues('waifuTraitFilters'),
+      },
+      {
+        label: 'Hair',
+        items: this.waifuHairColors,
+        active: this.state.waifuHairFilters,
+        onToggle: (value) => this.toggleFilterValue('waifuHairFilters', value),
+        onClear: () => this.clearFilterValues('waifuHairFilters'),
+      },
+      {
+        label: 'Skin',
+        items: this.waifuSkinTones,
+        active: this.state.waifuSkinFilters,
+        onToggle: (value) => this.toggleFilterValue('waifuSkinFilters', value),
+        onClear: () => this.clearFilterValues('waifuSkinFilters'),
+      },
+      {
+        label: 'Silhouette',
+        items: this.waifuChestSizes,
+        active: this.state.waifuChestFilters,
+        onToggle: (value) => this.toggleFilterValue('waifuChestFilters', value),
+        onClear: () => this.clearFilterValues('waifuChestFilters'),
+      },
+    ];
+
+    traitSections.forEach((section) => {
+      if (!section.items || section.items.length === 0) {
+        return;
+      }
+      const wrapper = document.createElement('div');
+      wrapper.className = 'waifu-selector__traits';
+      const label = document.createElement('span');
+      label.className = 'field__label';
+      label.textContent = section.label;
+      const list = document.createElement('div');
+      list.className = 'waifu-selector__trait-list';
+      section.items.forEach((item) => {
+        const isActive = section.active && section.active.includes(item);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = isActive ? 'trait-chip trait-chip--active' : 'trait-chip';
+        button.textContent = item;
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        button.addEventListener('click', () => section.onToggle(item));
+        list.appendChild(button);
+      });
+      if (section.active && section.active.length > 0) {
+        const clearButton = document.createElement('button');
+        clearButton.type = 'button';
+        clearButton.className = 'trait-chip';
+        clearButton.textContent = 'Clear';
+        clearButton.addEventListener('click', () => section.onClear());
+        list.appendChild(clearButton);
+      }
+      wrapper.appendChild(label);
+      wrapper.appendChild(list);
+      this.waifuFiltersContainer.appendChild(wrapper);
+    });
+  }
+
+  renderWaifuGallery() {
+    const filtered = this.getFilteredWaifus();
+    const visible = this.getVisibleWaifus(filtered);
+    const filtersActive =
+      this.state.waifuTraitFilters.length > 0 ||
+      this.state.waifuHairFilters.length > 0 ||
+      this.state.waifuSkinFilters.length > 0 ||
+      this.state.waifuChestFilters.length > 0;
+
+    this.waifuGallery.innerHTML = '';
+    visible.forEach((waifu) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className =
+        'waifu-pill' + (this.state.waifuSelection === waifu.name ? ' waifu-pill--active' : '');
+      const strong = document.createElement('strong');
+      strong.textContent = waifu.name;
+      const title = document.createElement('span');
+      title.textContent = waifu.animeTitle;
+      const attributeLabel = WAIFU_ATTRIBUTE_LABELS[this.state.waifuSortKey] || 'Score';
+      const value = typeof waifu[this.state.waifuSortKey] === 'number' ? waifu[this.state.waifuSortKey] : null;
+      const metricText = value != null ? `${attributeLabel} ${value}/10` : waifu.animeTitle;
+      const metric = document.createElement('span');
+      metric.className = 'waifu-pill__metric';
+      metric.textContent = metricText;
+      button.appendChild(strong);
+      button.appendChild(title);
+      button.appendChild(metric);
+      button.addEventListener('click', () => this.handleWaifuSelect(waifu.name));
+      this.waifuGallery.appendChild(button);
+    });
+
+    if (filtered.length > 0 && visible.length === 0) {
+      this.waifuEmptyMessage.style.display = 'block';
+      this.waifuEmptyMessage.textContent = 'No muse matches the current filters.';
+    } else {
+      this.waifuEmptyMessage.style.display = 'none';
+    }
+
+    if (filtered.length > visible.length && !filtersActive) {
+      this.waifuShowMoreButton.style.display = 'inline-flex';
+      this.waifuShowMoreButton.textContent = this.state.showAllWaifus
+        ? 'Show featured only'
+        : 'Show the full roster';
+    } else {
+      this.waifuShowMoreButton.style.display = 'none';
+    }
+  }
+
+  renderFilterControls() {
+    this.animeFilterToggle.textContent = this.state.animeFiltersOpen
+      ? 'Hide search filters'
+      : 'Show search filters';
+
+    this.filterBar.style.display = this.state.animeFiltersOpen ? 'grid' : 'none';
+    this.searchInput.value = this.state.searchTerm;
+    this.sortSelect.value = this.state.sortBy;
+
+    this.genreChipList.innerHTML = '';
+    if (this.state.genreOptions.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'chip-list__empty';
+      empty.textContent = 'Genres will appear once content loads.';
+      this.genreChipList.appendChild(empty);
+    } else {
+      this.state.genreOptions.forEach((genre) => {
+        const isActive = this.state.selectedGenres.includes(genre);
+        const label = document.createElement('label');
+        label.className = isActive ? 'chip chip--active' : 'chip';
+        const icon = Icons.Tag({ className: 'chip__icon', 'aria-hidden': 'true' });
+        const text = document.createElement('span');
+        text.textContent = genre;
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = isActive;
+        input.addEventListener('change', () => this.toggleGenre(genre));
+        label.appendChild(icon);
+        label.appendChild(text);
+        label.appendChild(input);
+        this.genreChipList.appendChild(label);
+      });
+    }
+  }
+
+  renderAnimeSection() {
+    const sortedAnime = this.getSortedAnime();
+    this.loadingMessage.style.display = this.state.isLoading ? 'block' : 'none';
+    this.errorMessage.style.display = this.state.error ? 'block' : 'none';
+    this.errorMessage.textContent = this.state.error || '';
+    const showEmpty = !this.state.isLoading && !this.state.error && sortedAnime.length === 0;
+    this.emptyMessage.style.display = showEmpty ? 'block' : 'none';
+
+    this.animeGrid.innerHTML = '';
+    sortedAnime.forEach((anime) => {
+      this.animeGrid.appendChild(this.createAnimeCard(anime));
+    });
+  }
+
+  getSortedAnime() {
+    const list = Array.isArray(this.state.anime) ? this.state.anime.slice() : [];
+    const fallbackSort = (a, b) => {
+      const left = a && a.popularity != null ? a.popularity : 0;
+      const right = b && b.popularity != null ? b.popularity : 0;
+      return right - left;
+    };
+
+    if (this.state.sortBy === 'AVERAGE_SCORE') {
+      return list.sort((first, second) => {
+        const left = first && first.averageScore != null ? first.averageScore : 0;
+        const right = second && second.averageScore != null ? second.averageScore : 0;
+        if (right === left) {
+          return fallbackSort(first, second);
+        }
+        return right - left;
+      });
+    }
+
+    if (this.state.sortBy === 'MY_RATING') {
+      return list.sort((first, second) => {
+        const left = this.state.ratings && this.state.ratings[first.id] != null ? this.state.ratings[first.id] : -1;
+        const right = this.state.ratings && this.state.ratings[second.id] != null ? this.state.ratings[second.id] : -1;
+        if (right === left) {
+          return fallbackSort(first, second);
+        }
+        return right - left;
+      });
+    }
+
+    return list.sort(fallbackSort);
+  }
+
+  createAnimeCard(anime) {
+    const card = document.createElement('article');
+    card.className = 'anime-card';
+
+    const coverButton = document.createElement('button');
+    coverButton.type = 'button';
+    coverButton.className = 'anime-card__cover';
+    coverButton.addEventListener('click', () => this.openDetails(anime.id));
+    if (anime.coverImage && anime.coverImage.large) {
+      const img = document.createElement('img');
+      img.src = anime.coverImage.large;
+      img.alt = this.getAnimeTitle(anime);
+      img.loading = 'lazy';
+      coverButton.appendChild(img);
+    } else {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'anime-card__placeholder';
+      placeholder.textContent = 'Cover unavailable';
+      coverButton.appendChild(placeholder);
+    }
+    card.appendChild(coverButton);
+
+    const content = document.createElement('div');
+    content.className = 'anime-card__content';
+
+    const title = document.createElement('h3');
+    title.className = 'anime-card__title';
+    const displayTitle = this.getAnimeTitle(anime);
+    title.textContent = displayTitle;
+    title.title = displayTitle;
+
+    const metrics = document.createElement('div');
+    metrics.className = 'anime-card__metrics';
+    metrics.appendChild(
+      createMetric(Icons.Star, `Score ${anime.averageScore != null ? anime.averageScore : '—'}`)
+    );
+    metrics.appendChild(
+      createMetric(
+        Icons.Flame,
+        `Popularity ${anime.popularity != null ? anime.popularity : '—'}`
+      )
+    );
+
+    const actions = document.createElement('div');
+    actions.className = 'anime-card__actions';
+
+    const ratingControl = document.createElement('div');
+    ratingControl.className = 'rating-control';
+    const ratingLabel = document.createElement('span');
+    ratingLabel.className = 'rating-control__label';
+    ratingLabel.appendChild(Icons.Spark({ className: 'metric__icon', 'aria-hidden': 'true' }));
+    ratingLabel.appendChild(document.createTextNode('My Rating'));
+    const starRating = createStarRating(
+      this.state.ratings[anime.id] != null ? this.state.ratings[anime.id] : null,
+      (rating) => this.handleRatingChange(anime.id, rating)
+    );
+    ratingControl.appendChild(ratingLabel);
+    ratingControl.appendChild(starRating);
+
+    const detailsButton = document.createElement('button');
+    detailsButton.type = 'button';
+    detailsButton.className = 'button button--primary';
+    detailsButton.appendChild(document.createTextNode('View details'));
+    detailsButton.appendChild(Icons.ArrowRight({ className: 'button__icon', 'aria-hidden': 'true' }));
+    detailsButton.addEventListener('click', () => this.openDetails(anime.id));
+
+    actions.appendChild(ratingControl);
+    actions.appendChild(detailsButton);
+
+    content.appendChild(title);
+    content.appendChild(metrics);
+    content.appendChild(actions);
+
+    card.appendChild(content);
+    return card;
+  }
+
+  renderDetailModal() {
+    if (this.state.detailId == null) {
+      this.detailOverlay.style.display = 'none';
+      return;
+    }
+
+    this.detailOverlay.style.display = 'grid';
+    this.detailContent.innerHTML = '';
+
+    if (this.state.detailLoading) {
+      const loading = document.createElement('p');
+      loading.className = 'status-message';
+      loading.textContent = 'Gathering details...';
+      this.detailContent.appendChild(loading);
+    }
+
+    if (this.state.detailError) {
+      const error = document.createElement('p');
+      error.className = 'status-message error';
+      error.textContent = this.state.detailError;
+      this.detailContent.appendChild(error);
+    }
+
+    const data = this.state.detailData;
+    if (data) {
+      const header = document.createElement('header');
+      header.className = 'detail-modal__header';
+      if (data.coverImage && data.coverImage.large) {
+        const cover = document.createElement('div');
+        cover.className = 'detail-modal__cover';
+        const image = document.createElement('img');
+        const title = this.getAnimeTitle(data);
+        image.src = data.coverImage.large;
+        image.alt = title || 'Anime cover';
+        cover.appendChild(image);
+        header.appendChild(cover);
+      }
+
+      const info = document.createElement('div');
+      const title = document.createElement('h2');
+      title.className = 'detail-modal__title';
+      title.textContent = this.getAnimeTitle(data);
+      info.appendChild(title);
+
+      const meta = document.createElement('div');
+      meta.className = 'detail-modal__meta';
+      meta.appendChild(
+        createMetric(
+          Icons.Star,
+          `Average ${data.averageScore != null ? data.averageScore : '—'}`
+        )
+      );
+      meta.appendChild(
+        createMetric(
+          Icons.Flame,
+          `Popularity ${data.popularity != null ? data.popularity : '—'}`
+        )
+      );
+      if (data.episodes != null) {
+        meta.appendChild(createMetric(Icons.Spark, `Episodes ${data.episodes}`));
+      }
+      if (data.status) {
+        meta.appendChild(createMetric(Icons.Tag, data.status));
+      }
+      if (data.duration != null) {
+        meta.appendChild(createMetric(Icons.Tag, `${data.duration} min`));
+      }
+      if (data.seasonYear) {
+        meta.appendChild(createMetric(Icons.Tag, `${data.seasonYear}`));
+      }
+      info.appendChild(meta);
+
+      if (Array.isArray(data.genres) && data.genres.length > 0) {
+        const genres = document.createElement('p');
+        genres.className = 'detail-modal__genres';
+        genres.textContent = data.genres.join(' · ');
+        info.appendChild(genres);
+      }
+
+      header.appendChild(info);
+      this.detailContent.appendChild(header);
+
+      if (data.description) {
+        const description = document.createElement('p');
+        description.className = 'detail-modal__description';
+        description.textContent = data.description;
+        this.detailContent.appendChild(description);
+      }
+
+      const detailWaifus = this.state.detailId
+        ? sortWaifuList(
+            WAIFUS.filter((item) => item.animeId === this.state.detailId),
+            this.state.waifuSortKey,
+            this.state.waifuSortDirection
+          )
+        : [];
+      if (detailWaifus.length > 0) {
+        const waifuSection = document.createElement('div');
+        waifuSection.className = 'detail-modal__waifus';
+        const label = document.createElement('h3');
+        label.className = 'field__label';
+        label.textContent = 'Beloved waifus';
+        const list = document.createElement('div');
+        list.className = 'detail-modal__waifu-list';
+        const attributeKey = this.state.waifuSortKey;
+        const attributeLabel = WAIFU_ATTRIBUTE_LABELS[attributeKey] || 'Score';
+        detailWaifus.forEach((waifu) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className =
+            'waifu-pill' + (this.state.waifuSelection === waifu.name ? ' waifu-pill--active' : '');
+          const name = document.createElement('strong');
+          name.textContent = waifu.name;
+          const animeTitle = document.createElement('span');
+          animeTitle.textContent = waifu.animeTitle;
+          const value = typeof waifu[attributeKey] === 'number' ? waifu[attributeKey] : null;
+          const metricText = value != null ? `${attributeLabel} ${value}/10` : waifu.animeTitle;
+          const metric = document.createElement('span');
+          metric.className = 'waifu-pill__metric';
+          metric.textContent = metricText;
+          button.appendChild(name);
+          button.appendChild(animeTitle);
+          button.appendChild(metric);
+          button.addEventListener('click', () => this.handleWaifuSelect(waifu.name));
+          list.appendChild(button);
+        });
+        waifuSection.appendChild(label);
+        waifuSection.appendChild(list);
+        this.detailContent.appendChild(waifuSection);
+      }
+    }
+  }
+
+  getAnimeTitle(anime) {
+    if (!anime || !anime.title) {
+      return 'Untitled';
+    }
+    return anime.title.english || anime.title.romaji || 'Untitled';
+  }
+
+  toggleFilterValue(key, value) {
+    const current = this.state[key] || [];
+    const next = current.includes(value)
+      ? current.filter((item) => item !== value)
+      : current.concat(value);
+    const updates = {};
+    updates[key] = next;
+    this.setState(updates);
+  }
+
+  clearFilterValues(key) {
+    const updates = {};
+    updates[key] = [];
+    this.setState(updates);
+  }
+
+  toggleWaifuSortDirection() {
+    this.setState({ waifuSortDirection: this.state.waifuSortDirection === 'asc' ? 'desc' : 'asc' });
+  }
+
+  toggleShowAllWaifus() {
+    this.setState({ showAllWaifus: !this.state.showAllWaifus });
+  }
+
+  toggleWaifuFilters() {
+    this.setState({ waifuFiltersOpen: !this.state.waifuFiltersOpen });
+  }
+
+  toggleAnimeFilters() {
+    this.setState({ animeFiltersOpen: !this.state.animeFiltersOpen });
+  }
+
+  handleSearchChange(value) {
+    this.setState({ searchTerm: value });
+    this.scheduleAnimeSearch();
+  }
+
+  handleSortChange(value) {
+    this.setState({ sortBy: value });
+  }
+
+  toggleGenre(genre) {
+    const current = this.state.selectedGenres;
+    const next = current.includes(genre)
+      ? current.filter((item) => item !== genre)
+      : current.concat(genre);
+    this.setState({ selectedGenres: next });
+    this.scheduleAnimeSearch();
+  }
+
+  handleRatingChange(id, rating) {
+    const next = Object.assign({}, this.state.ratings);
+    if (rating == null) {
+      delete next[id];
+    } else {
+      next[id] = rating;
+    }
+    this.setState({ ratings: next });
+    this.saveRatings(next);
+  }
+
+  handleWaifuSelect(name) {
+    const value = typeof name === 'string' ? name : '';
+    const previousSearch = this.state.searchTerm;
+    const updates = {
+      waifuSelection: value,
+    };
+
+    if (!value) {
+      this.waifuImageRequestId = 0;
+      updates.selectedWaifuImage = null;
+      updates.selectedWaifuImageLoading = false;
+      updates.selectedWaifuImageError = null;
+      this.setState(updates);
+      return;
+    }
+
+    const requestId = Date.now();
+    this.waifuImageRequestId = requestId;
+    updates.selectedWaifuImage = null;
+    updates.selectedWaifuImageLoading = true;
+    updates.selectedWaifuImageError = null;
+    this.setState(updates);
+
+    fetchCharacterImage(value)
+      .then((image) => {
+        if (this.waifuImageRequestId !== requestId) {
+          return;
+        }
+        this.setState({ selectedWaifuImage: image, selectedWaifuImageLoading: false });
+      })
+      .catch((error) => {
+        if (this.waifuImageRequestId !== requestId) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : 'Unable to fetch portrait';
+        this.setState({
+          selectedWaifuImage: null,
+          selectedWaifuImageError: message,
+          selectedWaifuImageLoading: false,
+        });
+      });
+
+    const entry = WAIFUS.find((item) => item.name === value);
+    if (entry) {
+      if (entry.animeTitle && entry.animeTitle !== previousSearch) {
+        this.setState({ searchTerm: entry.animeTitle });
+        this.scheduleAnimeSearch();
+      }
+      if (entry.animeId !== this.state.detailId) {
+        this.openDetails(entry.animeId);
+      }
+    }
+  }
+
+  openDetails(id) {
+    const numericId = typeof id === 'string' ? Number(id) : id;
+    const token = Symbol('detail');
+    this.activeDetailToken = token;
+    this.setState({
+      detailId: numericId,
+      detailData: null,
+      detailError: null,
+      detailLoading: true,
+    });
+    this.ensureWaifuSelectionForDetail(numericId);
+
+    getAnimeById(numericId)
+      .then((data) => {
+        if (this.activeDetailToken !== token) {
+          return;
+        }
+        this.setState({ detailData: data, detailLoading: false });
+      })
+      .catch((error) => {
+        if (this.activeDetailToken !== token) {
+          return;
+        }
+        console.error(error);
+        const message = error instanceof Error ? error.message : 'Failed to load details';
+        this.setState({ detailError: message, detailLoading: false });
+      });
+  }
+
+  ensureWaifuSelectionForDetail(id) {
+    const matches = WAIFUS.filter((item) => item.animeId === id);
+    if (matches.length === 0) {
+      return;
+    }
+    const alreadySelected = matches.some((item) => item.name === this.state.waifuSelection);
+    if (!alreadySelected) {
+      this.setState({
+        waifuSelection: matches[0].name,
+        selectedWaifuImage: null,
+        selectedWaifuImageError: null,
+        selectedWaifuImageLoading: false,
+      });
+    }
+  }
+
+  closeDetails() {
+    this.setState({
+      detailId: null,
+      detailData: null,
+      detailError: null,
+      detailLoading: false,
+    });
+  }
 }
+
+function createMetric(iconFactory, label) {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'metric';
+  const icon = iconFactory({ className: 'metric__icon', 'aria-hidden': 'true' });
+  const text = document.createElement('span');
+  text.textContent = label;
+  wrapper.appendChild(icon);
+  wrapper.appendChild(text);
+  return wrapper;
+}
+
+function createStarRating(value, onChange) {
+  const container = document.createElement('div');
+  container.className = 'star-rating';
+  const group = document.createElement('div');
+  group.className = 'star-rating__stars';
+  group.setAttribute('role', 'radiogroup');
+  group.setAttribute('aria-label', 'My rating');
+  const label = document.createElement('span');
+  label.className = 'rating-control__value';
+  label.textContent = value != null ? `${value}/10` : 'Tap a star to rate';
+  container.appendChild(group);
+  container.appendChild(label);
+
+  const buttons = [];
+  let hovered = null;
+
+  const refreshVisuals = () => {
+    buttons.forEach((button, index) => {
+      const score = index + 1;
+      const active = value != null && score <= value;
+      const hoverActive = hovered != null && score <= hovered;
+      button.dataset.active = active ? 'true' : 'false';
+      button.dataset.hover = hoverActive ? 'true' : 'false';
+      button.setAttribute('aria-pressed', value === score ? 'true' : 'false');
+      const desired = hoverActive || active ? Icons.StarSolid : Icons.Star;
+      const currentIcon = button.querySelector('svg');
+      const nextIcon = desired({ className: 'star-icon', 'aria-hidden': 'true' });
+      if (currentIcon) {
+        button.replaceChild(nextIcon, currentIcon);
+      } else {
+        button.appendChild(nextIcon);
+      }
+    });
+    label.textContent = value != null ? `${value}/10` : 'Tap a star to rate';
+  };
+
+  for (let index = 0; index < 10; index += 1) {
+    const score = index + 1;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'star-button';
+    button.dataset.active = value != null && score <= value ? 'true' : 'false';
+    button.dataset.hover = 'false';
+    button.setAttribute('aria-label', `Rate ${score} ${score === 1 ? 'star' : 'stars'}`);
+    button.setAttribute('aria-pressed', value === score ? 'true' : 'false');
+    button.addEventListener('click', () => {
+      const next = value === score ? null : score;
+      if (typeof onChange === 'function') {
+        onChange(next);
+      }
+    });
+    button.addEventListener('mouseenter', () => {
+      hovered = score;
+      refreshVisuals();
+    });
+    button.addEventListener('mouseleave', () => {
+      hovered = null;
+      refreshVisuals();
+    });
+    button.addEventListener('focus', () => {
+      hovered = score;
+      refreshVisuals();
+    });
+    button.addEventListener('blur', () => {
+      hovered = null;
+      refreshVisuals();
+    });
+    group.appendChild(button);
+    buttons.push(button);
+  }
+
+  refreshVisuals();
+  return container;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const root = document.getElementById('root');
+  if (root) {
+    new AniRankerApp(root);
+  }
+});
