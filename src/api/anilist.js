@@ -1,103 +1,58 @@
-const API_URL = "https://graphql.anilist.co";
-
-const QUERY_SEARCH = `
-  query ($page:Int, $perPage:Int, $search:String, $genres:[String]) {
-    Page(page:$page, perPage:$perPage) {
-      media(
-        search:$search,
-        type:ANIME,
-        genre_in:$genres,
-        isAdult:false
-      ) {
-        id
-        title { romaji english }
-        coverImage { large }
-        averageScore
-        popularity
-        genres
-      }
-    }
-  }
-`;
-
-const QUERY_ANIME_DETAILS = `
-  query ($id:Int) {
-    Media(id:$id, type:ANIME) {
-      id
-      title { romaji english }
-      coverImage { large }
-      description(asHtml:false)
-      averageScore
-      popularity
-      genres
-      episodes
-      status
-      duration
-      seasonYear
-    }
-  }
-`;
-
-const QUERY_GENRE_COLLECTION = `
-  query {
-    GenreCollection
-  }
-`;
-
-const QUERY_CHARACTER = `
-  query ($search:String) {
-    Character(search:$search) {
-      id
-      name { full }
-      image { large }
-    }
-  }
-`;
+import { ANIME } from '../data/anime.js';
 
 const imageCache = new Map();
 
-export async function fetchGraphQL(query, variables) {
-  const response = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ query, variables }),
-  });
+const ALL_GENRES = Array.from(
+  new Set(
+    ANIME.flatMap((item) => (Array.isArray(item.genres) ? item.genres : []))
+  )
+).sort((a, b) => a.localeCompare(b));
 
-  if (!response.ok) {
-    throw new Error(`AniList request failed: ${response.status}`);
+const cloneAnime = (anime) => JSON.parse(JSON.stringify(anime));
+
+const normalize = (value) => (typeof value === 'string' ? value.toLowerCase() : '');
+
+const matchesQuery = (anime, query) => {
+  if (!query) {
+    return true;
   }
+  const title = anime.title || {};
+  const romaji = normalize(title.romaji);
+  const english = normalize(title.english);
+  return romaji.includes(query) || english.includes(query);
+};
 
-  const payload = await response.json();
-  if (payload.errors) {
-    throw new Error(payload.errors.map((item) => item.message).join(", "));
+const matchesGenres = (anime, genres) => {
+  if (!genres || genres.length === 0) {
+    return true;
   }
+  const list = Array.isArray(anime.genres) ? anime.genres : [];
+  return genres.every((genre) => list.includes(genre));
+};
 
-  return payload.data;
-}
+export async function searchAnime(query, options = {}) {
+  const normalizedQuery = normalize(query ? query.trim() : '');
+  const requestedGenres = Array.isArray(options.genres) ? options.genres : [];
+  const page = options.page && options.page > 0 ? options.page : 1;
+  const perPage = options.perPage && options.perPage > 0 ? options.perPage : 20;
+  const start = (page - 1) * perPage;
+  const end = start + perPage;
 
-export async function searchAnime(query, options) {
-  const variables = {
-    page: options && options.page ? options.page : 1,
-    perPage: options && options.perPage ? options.perPage : 20,
-    search: query && query.trim() ? query.trim() : undefined,
-    genres: options && options.genres && options.genres.length > 0 ? options.genres : undefined,
-  };
+  const filtered = ANIME.filter(
+    (item) => matchesQuery(item, normalizedQuery) && matchesGenres(item, requestedGenres)
+  );
 
-  const data = await fetchGraphQL(QUERY_SEARCH, variables);
-  return data && data.Page && Array.isArray(data.Page.media) ? data.Page.media : [];
+  return filtered.slice(start, end).map(cloneAnime);
 }
 
 export async function getAnimeById(id) {
-  const data = await fetchGraphQL(QUERY_ANIME_DETAILS, { id });
-  return data ? data.Media : null;
+  const numericId = typeof id === 'string' ? Number(id) : id;
+  const anime = ANIME.find((item) => item.id === numericId);
+  return anime ? cloneAnime(anime) : null;
 }
 
 export async function fetchGenres() {
-  const data = await fetchGraphQL(QUERY_GENRE_COLLECTION);
-  return Array.isArray(data && data.GenreCollection) ? data.GenreCollection : [];
+  return ALL_GENRES.slice();
 }
 
 export async function fetchCharacterImage(name) {
@@ -109,16 +64,9 @@ export async function fetchCharacterImage(name) {
     return imageCache.get(name);
   }
 
-  const data = await fetchGraphQL(QUERY_CHARACTER, { search: name });
-  const character = data && data.Character;
-  if (!character || !character.image) {
-    imageCache.set(name, null);
-    return null;
-  }
-
-  const image = character.image.large || null;
-  imageCache.set(name, image);
-  return image;
+  const placeholder = `https://placehold.co/256x256?text=${encodeURIComponent(name)}`;
+  imageCache.set(name, placeholder);
+  return placeholder;
 }
 
 export function clearCharacterImageCache() {
