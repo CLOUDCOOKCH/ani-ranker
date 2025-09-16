@@ -9,6 +9,10 @@ const ALL_GENRES = Array.from(
   )
 ).sort((a, b) => a.localeCompare(b));
 
+const ALL_STATUSES = Array.from(new Set(ANIME.map((item) => item.status).filter(Boolean))).sort(
+  (a, b) => a.localeCompare(b)
+);
+
 const cloneAnime = (anime) => JSON.parse(JSON.stringify(anime));
 
 const normalize = (value) => (typeof value === 'string' ? value.toLowerCase() : '');
@@ -31,16 +35,30 @@ const matchesGenres = (anime, genres) => {
   return genres.every((genre) => list.includes(genre));
 };
 
+const matchesStatuses = (anime, statuses) => {
+  if (!statuses || statuses.length === 0) {
+    return true;
+  }
+  if (!anime.status) {
+    return false;
+  }
+  return statuses.includes(anime.status);
+};
+
 export async function searchAnime(query, options = {}) {
   const normalizedQuery = normalize(query ? query.trim() : '');
   const requestedGenres = Array.isArray(options.genres) ? options.genres : [];
+  const requestedStatuses = Array.isArray(options.statuses) ? options.statuses : [];
   const page = options.page && options.page > 0 ? options.page : 1;
   const perPage = options.perPage && options.perPage > 0 ? options.perPage : 20;
   const start = (page - 1) * perPage;
   const end = start + perPage;
 
   const filtered = ANIME.filter(
-    (item) => matchesQuery(item, normalizedQuery) && matchesGenres(item, requestedGenres)
+    (item) =>
+      matchesQuery(item, normalizedQuery) &&
+      matchesGenres(item, requestedGenres) &&
+      matchesStatuses(item, requestedStatuses)
   );
 
   return filtered.slice(start, end).map(cloneAnime);
@@ -54,6 +72,10 @@ export async function getAnimeById(id) {
 
 export async function fetchGenres() {
   return ALL_GENRES.slice();
+}
+
+export async function fetchStatuses() {
+  return ALL_STATUSES.slice();
 }
 
 export async function fetchCharacterImage(name) {
