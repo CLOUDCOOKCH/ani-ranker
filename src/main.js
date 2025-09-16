@@ -1,4 +1,10 @@
-import { fetchCharacterImage, fetchGenres, getAnimeById, searchAnime } from './api/anilist.js';
+import {
+  fetchCharacterImage,
+  fetchGenres,
+  fetchStatuses,
+  getAnimeById,
+  searchAnime,
+} from './api/anilist.js';
 import { WAIFUS, sortWaifuList, WAIFU_ATTRIBUTE_LABELS } from './data/waifus.js';
 import Icons from './icons.js';
 
@@ -137,6 +143,8 @@ class AniRankerApp {
       error: null,
       genreOptions: [],
       selectedGenres: [],
+      statusOptions: [],
+      selectedStatuses: [],
       sortBy: 'POPULARITY',
       ratings: {},
       waifuSelection: '',
@@ -184,6 +192,7 @@ class AniRankerApp {
     this.applyTheme(this.state.activeTheme);
     this.render();
     this.loadGenres();
+    this.loadStatuses();
     this.scheduleAnimeSearch();
     this.bindGlobalEvents();
   }
@@ -273,12 +282,13 @@ class AniRankerApp {
   performAnimeSearch() {
     const query = this.state.searchTerm;
     const genres = this.state.selectedGenres.slice();
+    const statuses = this.state.selectedStatuses.slice();
     const token = Symbol('search');
     this.activeSearchToken = token;
 
     this.setState({ isLoading: true, error: null });
 
-    searchAnime(query, { perPage: 24, genres })
+    searchAnime(query, { perPage: 24, genres, statuses })
       .then((results) => {
         if (this.activeSearchToken !== token) {
           return;
@@ -307,6 +317,19 @@ class AniRankerApp {
       })
       .catch((error) => {
         console.error('Failed to load genres', error);
+      });
+  }
+
+  loadStatuses() {
+    fetchStatuses()
+      .then((statuses) => {
+        if (Array.isArray(statuses) && statuses.length > 0) {
+          const list = statuses.slice();
+          this.setState({ statusOptions: list });
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load statuses', error);
       });
   }
 
@@ -526,9 +549,20 @@ class AniRankerApp {
     genresField.appendChild(genresLabel);
     genresField.appendChild(this.genreChipList);
 
+    const statusField = document.createElement('div');
+    statusField.className = 'filter-bar__statuses field';
+    const statusLabel = document.createElement('span');
+    statusLabel.className = 'field__label';
+    statusLabel.textContent = 'Status';
+    this.statusChipList = document.createElement('div');
+    this.statusChipList.className = 'chip-list';
+    statusField.appendChild(statusLabel);
+    statusField.appendChild(this.statusChipList);
+
     section.appendChild(searchField);
     section.appendChild(sortField);
     section.appendChild(genresField);
+    section.appendChild(statusField);
     return section;
   }
 
@@ -936,6 +970,31 @@ class AniRankerApp {
         this.genreChipList.appendChild(label);
       });
     }
+
+    this.statusChipList.innerHTML = '';
+    if (this.state.statusOptions.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'chip-list__empty';
+      empty.textContent = 'Statuses will appear once content loads.';
+      this.statusChipList.appendChild(empty);
+    } else {
+      this.state.statusOptions.forEach((status) => {
+        const isActive = this.state.selectedStatuses.includes(status);
+        const label = document.createElement('label');
+        label.className = isActive ? 'chip chip--active' : 'chip';
+        const icon = Icons.Tag({ className: 'chip__icon', 'aria-hidden': 'true' });
+        const text = document.createElement('span');
+        text.textContent = status;
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = isActive;
+        input.addEventListener('change', () => this.toggleStatus(status));
+        label.appendChild(icon);
+        label.appendChild(text);
+        label.appendChild(input);
+        this.statusChipList.appendChild(label);
+      });
+    }
   }
 
   renderAnimeSection() {
@@ -1249,6 +1308,15 @@ class AniRankerApp {
       ? current.filter((item) => item !== genre)
       : current.concat(genre);
     this.setState({ selectedGenres: next });
+    this.scheduleAnimeSearch();
+  }
+
+  toggleStatus(status) {
+    const current = this.state.selectedStatuses;
+    const next = current.includes(status)
+      ? current.filter((item) => item !== status)
+      : current.concat(status);
+    this.setState({ selectedStatuses: next });
     this.scheduleAnimeSearch();
   }
 

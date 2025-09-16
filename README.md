@@ -1,6 +1,6 @@
 # AniRanker Static Site
 
-AniRanker is a purely static experience built with modern browser APIs that can be hosted anywhere GitHub Pages can serve HTML, CSS, and JavaScript files. All data used by the interface is bundled directly into the repository, so no server-side runtime or build tooling is required.
+AniRanker is a purely static experience built with modern browser APIs that can be hosted anywhere GitHub Pages can serve HTML, CSS, and JavaScript files. All data used by the interface is bundled directly into the repository, so no server-side runtime or build tooling is required. Powerful yet lightweight filters—covering search keywords, genres, and release status—help you curate the catalogue without needing any backend services.
 
 ## Project structure
 
