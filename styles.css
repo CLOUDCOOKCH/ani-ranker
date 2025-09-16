@@ -979,3 +979,21 @@ button.waifu-pill:focus-visible {
     width: 100%;
   }
 }
+@media (max-width: 540px) {
+  .waifu-selector__preview {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .waifu-selector__preview-card {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .waifu-selector__preview-image,
+  .waifu-selector__preview-placeholder {
+    width: 100%;
+    max-width: 240px;
+  }
+}
