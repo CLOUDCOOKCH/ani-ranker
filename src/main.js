@@ -131,6 +131,15 @@ const THEME_PRESETS = [
   },
 ];
 
+const COLLECTION_STATUS_OPTIONS = [
+  { value: '', label: 'No status' },
+  { value: 'planning', label: 'Planning' },
+  { value: 'watching', label: 'Watching' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'on-hold', label: 'On hold' },
+  { value: 'dropped', label: 'Dropped' },
+];
+
 class AniRankerApp {
   constructor(rootElement) {
     this.rootElement = rootElement;
@@ -147,6 +156,8 @@ class AniRankerApp {
       selectedStatuses: [],
       sortBy: 'POPULARITY',
       ratings: {},
+      collectionStatuses: {},
+      collectionStatusFilter: 'ALL',
       waifuSelection: '',
       waifuSortKey: 'grace',
       waifuSortDirection: 'desc',
@@ -193,6 +204,7 @@ class AniRankerApp {
     }
 
     this.restoreRatings();
+    this.restoreCollectionStatuses();
     this.createLayout();
     this.applyTheme(this.state.activeTheme);
     this.render();
@@ -232,6 +244,7 @@ class AniRankerApp {
       console.warn('Failed to persist ratings', error);
     }
   }
+
 
   getDefaultPreferences() {
     return {
@@ -360,6 +373,7 @@ class AniRankerApp {
     this.setState(updates);
     this.persistPreferences();
   }
+
 
   setState(updates) {
     const previousTheme = this.state.activeTheme;
@@ -692,10 +706,21 @@ class AniRankerApp {
     statusField.appendChild(statusLabel);
     statusField.appendChild(this.statusChipList);
 
+    const collectionField = document.createElement('div');
+    collectionField.className = 'filter-bar__collection field';
+    const collectionLabel = document.createElement('span');
+    collectionLabel.className = 'field__label';
+    collectionLabel.textContent = 'My list';
+    this.collectionFilterList = document.createElement('div');
+    this.collectionFilterList.className = 'chip-list';
+    collectionField.appendChild(collectionLabel);
+    collectionField.appendChild(this.collectionFilterList);
+
     section.appendChild(searchField);
     section.appendChild(sortField);
     section.appendChild(genresField);
     section.appendChild(statusField);
+    section.appendChild(collectionField);
     return section;
   }
 
@@ -1130,6 +1155,24 @@ class AniRankerApp {
         this.statusChipList.appendChild(label);
       });
     }
+
+    if (this.collectionFilterList) {
+      this.collectionFilterList.innerHTML = '';
+      const options = [
+        { value: 'ALL', label: 'All' },
+        { value: 'UNTRACKED', label: 'Untracked' },
+        ...COLLECTION_STATUS_OPTIONS.filter((option) => option.value),
+      ];
+      options.forEach((option) => {
+        const isActive = this.state.collectionStatusFilter === option.value;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = isActive ? 'chip chip--active' : 'chip';
+        button.textContent = option.label;
+        button.addEventListener('click', () => this.setCollectionStatusFilter(option.value));
+        this.collectionFilterList.appendChild(button);
+      });
+    }
   }
 
   renderAnimeSection() {
@@ -1148,6 +1191,25 @@ class AniRankerApp {
 
   getSortedAnime() {
     const list = Array.isArray(this.state.anime) ? this.state.anime.slice() : [];
+    const filter = this.state.collectionStatusFilter;
+    let filtered = list;
+    if (filter === 'UNTRACKED') {
+      filtered = list.filter((item) => {
+        if (!item || !item.id) {
+          return true;
+        }
+        return !this.state.collectionStatuses || this.state.collectionStatuses[item.id] == null;
+      });
+    } else if (filter && filter !== 'ALL') {
+      filtered = list.filter((item) => {
+        if (!item || !item.id) {
+          return false;
+        }
+        return (
+          this.state.collectionStatuses && this.state.collectionStatuses[item.id] === filter
+        );
+      });
+    }
     const fallbackSort = (a, b) => {
       const left = a && a.popularity != null ? a.popularity : 0;
       const right = b && b.popularity != null ? b.popularity : 0;
@@ -1155,7 +1217,7 @@ class AniRankerApp {
     };
 
     if (this.state.sortBy === 'AVERAGE_SCORE') {
-      return list.sort((first, second) => {
+      return filtered.sort((first, second) => {
         const left = first && first.averageScore != null ? first.averageScore : 0;
         const right = second && second.averageScore != null ? second.averageScore : 0;
         if (right === left) {
@@ -1166,7 +1228,7 @@ class AniRankerApp {
     }
 
     if (this.state.sortBy === 'MY_RATING') {
-      return list.sort((first, second) => {
+      return filtered.sort((first, second) => {
         const left = this.state.ratings && this.state.ratings[first.id] != null ? this.state.ratings[first.id] : -1;
         const right = this.state.ratings && this.state.ratings[second.id] != null ? this.state.ratings[second.id] : -1;
         if (right === left) {
@@ -1176,7 +1238,7 @@ class AniRankerApp {
       });
     }
 
-    return list.sort(fallbackSort);
+    return filtered.sort(fallbackSort);
   }
 
   createAnimeCard(anime) {
@@ -1225,6 +1287,38 @@ class AniRankerApp {
     const actions = document.createElement('div');
     actions.className = 'anime-card__actions';
 
+    const collectionControl = document.createElement('div');
+    collectionControl.className = 'collection-control';
+    const collectionLabel = document.createElement('span');
+    collectionLabel.className = 'collection-control__label';
+    collectionLabel.appendChild(Icons.Tag({ className: 'collection-control__icon', 'aria-hidden': 'true' }));
+    collectionLabel.appendChild(document.createTextNode('My list'));
+    const collectionShell = document.createElement('div');
+    collectionShell.className = 'select-shell collection-control__select';
+    const collectionIcon = Icons.Tag({ className: 'select-shell__icon', 'aria-hidden': 'true' });
+    const collectionChevron = Icons.Chevron({ className: 'select-shell__chevron', 'aria-hidden': 'true' });
+    const collectionSelect = document.createElement('select');
+    const savedStatus =
+      this.state.collectionStatuses && this.state.collectionStatuses[anime.id]
+        ? this.state.collectionStatuses[anime.id]
+        : '';
+    COLLECTION_STATUS_OPTIONS.forEach((option) => {
+      const element = document.createElement('option');
+      element.value = option.value;
+      element.textContent = option.label;
+      collectionSelect.appendChild(element);
+    });
+    collectionSelect.value = savedStatus;
+    collectionSelect.addEventListener('change', (event) => {
+      const value = event.target.value;
+      this.handleCollectionStatusChange(anime.id, value ? value : null);
+    });
+    collectionShell.appendChild(collectionIcon);
+    collectionShell.appendChild(collectionSelect);
+    collectionShell.appendChild(collectionChevron);
+    collectionControl.appendChild(collectionLabel);
+    collectionControl.appendChild(collectionShell);
+
     const ratingControl = document.createElement('div');
     ratingControl.className = 'rating-control';
     const ratingLabel = document.createElement('span');
@@ -1245,6 +1339,7 @@ class AniRankerApp {
     detailsButton.appendChild(Icons.ArrowRight({ className: 'button__icon', 'aria-hidden': 'true' }));
     detailsButton.addEventListener('click', () => this.openDetails(anime.id));
 
+    actions.appendChild(collectionControl);
     actions.appendChild(ratingControl);
     actions.appendChild(detailsButton);
 
@@ -1326,6 +1421,16 @@ class AniRankerApp {
       if (data.seasonYear) {
         meta.appendChild(createMetric(Icons.Tag, `${data.seasonYear}`));
       }
+      const detailId = data && data.id != null ? data.id : this.state.detailId;
+      const collectionStatusValue =
+        this.state.collectionStatuses && detailId != null
+          ? this.state.collectionStatuses[detailId]
+          : null;
+      const collectionStatusLabel = this.getCollectionStatusLabel(collectionStatusValue);
+      const collectionStatusText = collectionStatusLabel
+        ? `My list ${collectionStatusLabel}`
+        : 'My list Untracked';
+      meta.appendChild(createMetric(Icons.Spark, collectionStatusText));
       info.appendChild(meta);
 
       if (Array.isArray(data.genres) && data.genres.length > 0) {
@@ -1396,6 +1501,14 @@ class AniRankerApp {
     return anime.title.english || anime.title.romaji || 'Untitled';
   }
 
+  getCollectionStatusLabel(value) {
+    if (!value) {
+      return null;
+    }
+    const option = COLLECTION_STATUS_OPTIONS.find((item) => item.value === value);
+    return option ? option.label : value;
+  }
+
   toggleFilterValue(key, value) {
     const current = this.state[key] || [];
     const next = current.includes(value)
@@ -1428,6 +1541,11 @@ class AniRankerApp {
 
   toggleAnimeFilters() {
     this.setState({ animeFiltersOpen: !this.state.animeFiltersOpen });
+  }
+
+  setCollectionStatusFilter(value) {
+    const next = this.state.collectionStatusFilter === value ? 'ALL' : value;
+    this.setState({ collectionStatusFilter: next });
   }
 
   handleSearchChange(value) {
@@ -1466,6 +1584,17 @@ class AniRankerApp {
     }
     this.setState({ ratings: next });
     this.saveRatings(next);
+  }
+
+  handleCollectionStatusChange(id, status) {
+    const next = Object.assign({}, this.state.collectionStatuses);
+    if (!status) {
+      delete next[id];
+    } else {
+      next[id] = status;
+    }
+    this.setState({ collectionStatuses: next });
+    this.saveCollectionStatuses(next);
   }
 
   handleWaifuSelect(name) {
