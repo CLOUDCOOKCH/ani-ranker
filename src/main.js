@@ -198,6 +198,11 @@ class AniRankerApp {
     this.waifuImageRequestId = 0;
     this.isMounted = false;
 
+    const savedPreferences = this.loadPreferences();
+    if (savedPreferences && typeof savedPreferences === 'object') {
+      this.state = Object.assign({}, this.state, savedPreferences);
+    }
+
     this.restoreRatings();
     this.restoreCollectionStatuses();
     this.createLayout();
@@ -240,27 +245,135 @@ class AniRankerApp {
     }
   }
 
-  restoreCollectionStatuses() {
+
+  getDefaultPreferences() {
+    return {
+      activeTheme:
+        this.themePresets && this.themePresets.length > 0 ? this.themePresets[0].id : null,
+      searchTerm: '',
+      selectedGenres: [],
+      selectedStatuses: [],
+      waifuSortKey: 'grace',
+      waifuSortDirection: 'desc',
+      waifuTraitFilters: [],
+      waifuHairFilters: [],
+      waifuSkinFilters: [],
+      waifuChestFilters: [],
+      showAllWaifus: false,
+    };
+  }
+
+  loadPreferences() {
+    const defaults = this.getDefaultPreferences();
     try {
-      const stored = window.localStorage.getItem('ani-ranker-collection-statuses');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && typeof parsed === 'object') {
-          this.state.collectionStatuses = parsed;
-        }
+      const stored = window.localStorage.getItem('ani-ranker-preferences');
+      if (!stored) {
+        return defaults;
       }
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== 'object') {
+        return defaults;
+      }
+      const ensureStringArray = (value) =>
+        Array.isArray(value) ? value.filter((item) => typeof item === 'string') : undefined;
+      const sanitized = Object.assign({}, defaults);
+      if (
+        typeof parsed.activeTheme === 'string' &&
+        this.themePresets &&
+        this.themePresets.some((item) => item.id === parsed.activeTheme)
+      ) {
+        sanitized.activeTheme = parsed.activeTheme;
+      }
+      if (typeof parsed.searchTerm === 'string') {
+        sanitized.searchTerm = parsed.searchTerm;
+      }
+      const genreList = ensureStringArray(parsed.selectedGenres);
+      if (genreList) {
+        sanitized.selectedGenres = genreList;
+      }
+      const statusList = ensureStringArray(parsed.selectedStatuses);
+      if (statusList) {
+        sanitized.selectedStatuses = statusList;
+      }
+      if (typeof parsed.waifuSortKey === 'string' && parsed.waifuSortKey in WAIFU_ATTRIBUTE_LABELS) {
+        sanitized.waifuSortKey = parsed.waifuSortKey;
+      }
+      if (parsed.waifuSortDirection === 'asc' || parsed.waifuSortDirection === 'desc') {
+        sanitized.waifuSortDirection = parsed.waifuSortDirection;
+      }
+      const traitList = ensureStringArray(parsed.waifuTraitFilters);
+      if (traitList) {
+        sanitized.waifuTraitFilters = traitList;
+      }
+      const hairList = ensureStringArray(parsed.waifuHairFilters);
+      if (hairList) {
+        sanitized.waifuHairFilters = hairList;
+      }
+      const skinList = ensureStringArray(parsed.waifuSkinFilters);
+      if (skinList) {
+        sanitized.waifuSkinFilters = skinList;
+      }
+      const chestList = ensureStringArray(parsed.waifuChestFilters);
+      if (chestList) {
+        sanitized.waifuChestFilters = chestList;
+      }
+      if (typeof parsed.showAllWaifus === 'boolean') {
+        sanitized.showAllWaifus = parsed.showAllWaifus;
+      }
+      return sanitized;
     } catch (error) {
-      console.warn('Unable to restore saved collection statuses', error);
+      console.warn('Unable to restore preferences', error);
+      return defaults;
     }
   }
 
-  saveCollectionStatuses(statuses) {
+  savePreferences(preferences) {
     try {
-      window.localStorage.setItem('ani-ranker-collection-statuses', JSON.stringify(statuses));
+      window.localStorage.setItem('ani-ranker-preferences', JSON.stringify(preferences));
     } catch (error) {
-      console.warn('Failed to persist collection statuses', error);
+      console.warn('Failed to persist preferences', error);
     }
   }
+
+  extractPreferences(state = this.state) {
+    const ensureArray = (value) => (Array.isArray(value) ? value.slice() : []);
+    const direction = state.waifuSortDirection === 'asc' ? 'asc' : 'desc';
+    const defaults = this.getDefaultPreferences();
+    const themeIsValid =
+      typeof state.activeTheme === 'string' &&
+      this.themePresets &&
+      this.themePresets.some((item) => item.id === state.activeTheme);
+    return {
+      activeTheme: themeIsValid
+        ? state.activeTheme
+        : defaults.activeTheme,
+      searchTerm: typeof state.searchTerm === 'string' ? state.searchTerm : '',
+      selectedGenres: ensureArray(state.selectedGenres),
+      selectedStatuses: ensureArray(state.selectedStatuses),
+      waifuSortKey:
+        typeof state.waifuSortKey === 'string' && state.waifuSortKey in WAIFU_ATTRIBUTE_LABELS
+          ? state.waifuSortKey
+          : defaults.waifuSortKey,
+      waifuSortDirection: direction,
+      waifuTraitFilters: ensureArray(state.waifuTraitFilters),
+      waifuHairFilters: ensureArray(state.waifuHairFilters),
+      waifuSkinFilters: ensureArray(state.waifuSkinFilters),
+      waifuChestFilters: ensureArray(state.waifuChestFilters),
+      showAllWaifus: typeof state.showAllWaifus === 'boolean'
+        ? state.showAllWaifus
+        : defaults.showAllWaifus,
+    };
+  }
+
+  persistPreferences(state = this.state) {
+    this.savePreferences(this.extractPreferences(state));
+  }
+
+  updatePreferences(updates) {
+    this.setState(updates);
+    this.persistPreferences();
+  }
+
 
   setState(updates) {
     const previousTheme = this.state.activeTheme;
@@ -300,7 +413,7 @@ class AniRankerApp {
     if (!exists) {
       return;
     }
-    this.setState({ activeTheme: themeId });
+    this.updatePreferences({ activeTheme: themeId });
   }
 
   scheduleAnimeSearch() {
@@ -842,7 +955,9 @@ class AniRankerApp {
       sortSelect.appendChild(element);
     });
     sortSelect.value = this.state.waifuSortKey;
-    sortSelect.addEventListener('change', (event) => this.setState({ waifuSortKey: event.target.value }));
+    sortSelect.addEventListener('change', (event) =>
+      this.updatePreferences({ waifuSortKey: event.target.value })
+    );
     const sortChevron = Icons.Chevron({ className: 'select-shell__chevron', 'aria-hidden': 'true' });
     sortShell.appendChild(sortIcon);
     sortShell.appendChild(sortSelect);
@@ -1401,21 +1516,23 @@ class AniRankerApp {
       : current.concat(value);
     const updates = {};
     updates[key] = next;
-    this.setState(updates);
+    this.updatePreferences(updates);
   }
 
   clearFilterValues(key) {
     const updates = {};
     updates[key] = [];
-    this.setState(updates);
+    this.updatePreferences(updates);
   }
 
   toggleWaifuSortDirection() {
-    this.setState({ waifuSortDirection: this.state.waifuSortDirection === 'asc' ? 'desc' : 'asc' });
+    this.updatePreferences({
+      waifuSortDirection: this.state.waifuSortDirection === 'asc' ? 'desc' : 'asc',
+    });
   }
 
   toggleShowAllWaifus() {
-    this.setState({ showAllWaifus: !this.state.showAllWaifus });
+    this.updatePreferences({ showAllWaifus: !this.state.showAllWaifus });
   }
 
   toggleWaifuFilters() {
@@ -1432,7 +1549,7 @@ class AniRankerApp {
   }
 
   handleSearchChange(value) {
-    this.setState({ searchTerm: value });
+    this.updatePreferences({ searchTerm: value });
     this.scheduleAnimeSearch();
   }
 
@@ -1445,7 +1562,7 @@ class AniRankerApp {
     const next = current.includes(genre)
       ? current.filter((item) => item !== genre)
       : current.concat(genre);
-    this.setState({ selectedGenres: next });
+    this.updatePreferences({ selectedGenres: next });
     this.scheduleAnimeSearch();
   }
 
@@ -1454,7 +1571,7 @@ class AniRankerApp {
     const next = current.includes(status)
       ? current.filter((item) => item !== status)
       : current.concat(status);
-    this.setState({ selectedStatuses: next });
+    this.updatePreferences({ selectedStatuses: next });
     this.scheduleAnimeSearch();
   }
 
@@ -1525,7 +1642,7 @@ class AniRankerApp {
     const entry = WAIFUS.find((item) => item.name === value);
     if (entry) {
       if (entry.animeTitle && entry.animeTitle !== previousSearch) {
-        this.setState({ searchTerm: entry.animeTitle });
+        this.updatePreferences({ searchTerm: entry.animeTitle });
         this.scheduleAnimeSearch();
       }
       if (entry.animeId !== this.state.detailId) {
