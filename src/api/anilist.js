@@ -1,6 +1,18 @@
 import { ANIME } from '../data/anime.js';
 import { createPortraitPlaceholder } from '../utils/placeholders.js';
 
+const ANILIST_GRAPHQL_ENDPOINT = 'https://graphql.anilist.co';
+const CHARACTER_IMAGE_QUERY = `
+  query ($search: String) {
+    Character(search: $search) {
+      image {
+        large
+        medium
+      }
+    }
+  }
+`;
+
 const imageCache = new Map();
 
 const ALL_GENRES = Array.from(
@@ -83,13 +95,57 @@ export async function fetchCharacterImage(name) {
     return null;
   }
 
-  if (imageCache.has(name)) {
-    return imageCache.get(name);
+  const cached = imageCache.get(name);
+  if (cached) {
+    return cached;
   }
 
-  const placeholder = createPortraitPlaceholder(name);
-  imageCache.set(name, placeholder);
-  return placeholder;
+  if (typeof fetch !== 'function') {
+    const placeholder = createPortraitPlaceholder(name);
+    imageCache.set(name, placeholder);
+    return placeholder;
+  }
+
+  const request = (async () => {
+    const response = await fetch(ANILIST_GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        query: CHARACTER_IMAGE_QUERY,
+        variables: { search: name },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Character lookup failed');
+    }
+
+    const payload = await response.json();
+    if (payload.errors && payload.errors.length > 0) {
+      throw new Error(payload.errors[0]?.message || 'Character lookup failed');
+    }
+
+    const image =
+      payload?.data?.Character?.image?.large ||
+      payload?.data?.Character?.image?.medium ||
+      null;
+
+    if (!image) {
+      throw new Error('Portrait unavailable');
+    }
+
+    imageCache.set(name, image);
+    return image;
+  })().catch((error) => {
+    imageCache.delete(name);
+    throw error instanceof Error ? error : new Error('Unable to fetch portrait');
+  });
+
+  imageCache.set(name, request);
+  return request;
 }
 
 export function clearCharacterImageCache() {
