@@ -245,6 +245,52 @@ class AniRankerApp {
     }
   }
 
+  restoreCollectionStatuses() {
+    try {
+      const stored = window.localStorage.getItem('ani-ranker-collection-statuses');
+      if (!stored) {
+        return;
+      }
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return;
+      }
+      const validStatuses = new Set(
+        COLLECTION_STATUS_OPTIONS.filter((option) => option.value).map((option) => option.value)
+      );
+      const sanitized = {};
+      Object.entries(parsed).forEach(([key, value]) => {
+        if (typeof value === 'string' && validStatuses.has(value)) {
+          sanitized[key] = value;
+        }
+      });
+      this.state.collectionStatuses = sanitized;
+    } catch (error) {
+      console.warn('Unable to restore saved collection statuses', error);
+    }
+  }
+
+  saveCollectionStatuses(statuses) {
+    try {
+      if (!statuses || typeof statuses !== 'object' || Array.isArray(statuses)) {
+        window.localStorage.removeItem('ani-ranker-collection-statuses');
+        return;
+      }
+      const validStatuses = new Set(
+        COLLECTION_STATUS_OPTIONS.filter((option) => option.value).map((option) => option.value)
+      );
+      const sanitized = {};
+      Object.entries(statuses).forEach(([key, value]) => {
+        if (typeof value === 'string' && validStatuses.has(value)) {
+          sanitized[key] = value;
+        }
+      });
+      window.localStorage.setItem('ani-ranker-collection-statuses', JSON.stringify(sanitized));
+    } catch (error) {
+      console.warn('Failed to persist collection statuses', error);
+    }
+  }
+
 
   getDefaultPreferences() {
     return {
