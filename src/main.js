@@ -199,6 +199,9 @@ class AniRankerApp {
       waifuHairFilters: [],
       waifuSkinFilters: [],
       waifuChestFilters: [],
+      waifuEyeFilters: [],
+      favoriteWaifus: [],
+      favoritesOnly: false,
       showAllWaifus: false,
       waifuFiltersOpen: false,
       animeFiltersOpen: false,
@@ -219,6 +222,9 @@ class AniRankerApp {
     this.waifuHairColors = Array.from(new Set(WAIFUS.map((item) => item.hairColor))).sort((a, b) =>
       a.localeCompare(b)
     );
+    this.waifuEyeColors = Array.from(
+      new Set(WAIFUS.map((item) => item.eyeColor).filter((color) => typeof color === 'string'))
+    ).sort((a, b) => a.localeCompare(b));
     this.waifuSkinTones = Array.from(new Set(WAIFUS.map((item) => item.skinTone))).sort((a, b) =>
       a.localeCompare(b)
     );
@@ -313,12 +319,16 @@ class AniRankerApp {
       waifuHairFilters: [],
       waifuSkinFilters: [],
       waifuChestFilters: [],
+      waifuEyeFilters: [],
+      favoriteWaifus: [],
+      favoritesOnly: false,
       showAllWaifus: false,
     };
   }
 
   loadPreferences() {
     const defaults = this.getDefaultPreferences();
+    const validWaifuNames = new Set(WAIFUS.map((item) => item.name));
     try {
       const stored = window.localStorage.getItem('ani-ranker-preferences');
       if (!stored) {
@@ -363,6 +373,10 @@ class AniRankerApp {
       if (hairList) {
         sanitized.waifuHairFilters = hairList;
       }
+      const eyeList = ensureStringArray(parsed.waifuEyeFilters);
+      if (eyeList) {
+        sanitized.waifuEyeFilters = eyeList;
+      }
       const skinList = ensureStringArray(parsed.waifuSkinFilters);
       if (skinList) {
         sanitized.waifuSkinFilters = skinList;
@@ -370,6 +384,13 @@ class AniRankerApp {
       const chestList = ensureStringArray(parsed.waifuChestFilters);
       if (chestList) {
         sanitized.waifuChestFilters = chestList;
+      }
+      const favoritesList = ensureStringArray(parsed.favoriteWaifus);
+      if (favoritesList) {
+        sanitized.favoriteWaifus = favoritesList.filter((name) => validWaifuNames.has(name));
+      }
+      if (typeof parsed.favoritesOnly === 'boolean') {
+        sanitized.favoritesOnly = parsed.favoritesOnly;
       }
       if (typeof parsed.showAllWaifus === 'boolean') {
         sanitized.showAllWaifus = parsed.showAllWaifus;
@@ -411,8 +432,14 @@ class AniRankerApp {
       waifuSortDirection: direction,
       waifuTraitFilters: ensureArray(state.waifuTraitFilters),
       waifuHairFilters: ensureArray(state.waifuHairFilters),
+      waifuEyeFilters: ensureArray(state.waifuEyeFilters),
       waifuSkinFilters: ensureArray(state.waifuSkinFilters),
       waifuChestFilters: ensureArray(state.waifuChestFilters),
+      favoriteWaifus: ensureArray(state.favoriteWaifus).filter((name) =>
+        WAIFUS.some((item) => item.name === name)
+      ),
+      favoritesOnly:
+        typeof state.favoritesOnly === 'boolean' ? state.favoritesOnly : defaults.favoritesOnly,
       showAllWaifus: typeof state.showAllWaifus === 'boolean'
         ? state.showAllWaifus
         : defaults.showAllWaifus,
@@ -882,11 +909,18 @@ class AniRankerApp {
     if (this.state.waifuHairFilters.length > 0) {
       list = list.filter((item) => this.state.waifuHairFilters.includes(item.hairColor));
     }
+    if (this.state.waifuEyeFilters.length > 0) {
+      list = list.filter((item) => this.state.waifuEyeFilters.includes(item.eyeColor));
+    }
     if (this.state.waifuSkinFilters.length > 0) {
       list = list.filter((item) => this.state.waifuSkinFilters.includes(item.skinTone));
     }
     if (this.state.waifuChestFilters.length > 0) {
       list = list.filter((item) => this.state.waifuChestFilters.includes(item.chest));
+    }
+    if (this.state.favoritesOnly) {
+      const favorites = this.getFavoriteWaifuSet();
+      list = list.filter((item) => favorites.has(item.name));
     }
     return sortWaifuList(list, this.state.waifuSortKey, this.state.waifuSortDirection);
   }
@@ -895,8 +929,10 @@ class AniRankerApp {
     const filtersActive =
       this.state.waifuTraitFilters.length > 0 ||
       this.state.waifuHairFilters.length > 0 ||
+      this.state.waifuEyeFilters.length > 0 ||
       this.state.waifuSkinFilters.length > 0 ||
-      this.state.waifuChestFilters.length > 0;
+      this.state.waifuChestFilters.length > 0 ||
+      this.state.favoritesOnly;
     if (filtersActive || this.state.showAllWaifus) {
       return filteredList;
     }
@@ -956,7 +992,13 @@ class AniRankerApp {
     series.textContent = selectedWaifu.animeTitle;
     const meta = document.createElement('p');
     meta.className = 'waifu-selector__preview-meta';
-    meta.textContent = `${selectedWaifu.hairColor} hair · ${selectedWaifu.skinTone} skin · ${selectedWaifu.chest}`;
+    const descriptors = [
+      selectedWaifu.hairColor ? `${selectedWaifu.hairColor} hair` : null,
+      selectedWaifu.eyeColor ? `${selectedWaifu.eyeColor} eyes` : null,
+      selectedWaifu.skinTone ? `${selectedWaifu.skinTone} skin` : null,
+      selectedWaifu.chest || null,
+    ].filter(Boolean);
+    meta.textContent = descriptors.join(' · ');
     const traits = document.createElement('div');
     traits.className = 'waifu-selector__preview-traits';
     selectedWaifu.traits.forEach((trait) => {
@@ -964,10 +1006,55 @@ class AniRankerApp {
       pill.textContent = trait;
       traits.appendChild(pill);
     });
+    const stats = document.createElement('div');
+    stats.className = 'waifu-selector__preview-stats';
+    Object.entries(WAIFU_ATTRIBUTE_LABELS).forEach(([key, label]) => {
+      if (key === 'name') {
+        return;
+      }
+      const value = typeof selectedWaifu[key] === 'number' ? selectedWaifu[key] : null;
+      if (value == null) {
+        return;
+      }
+      const statRow = document.createElement('div');
+      statRow.className = 'waifu-selector__stat';
+      statRow.setAttribute('role', 'group');
+      statRow.setAttribute('aria-label', `${label} ${value} out of 10`);
+
+      const labelElement = document.createElement('span');
+      labelElement.className = 'waifu-selector__stat-label';
+      labelElement.textContent = label;
+
+      const meter = document.createElement('span');
+      meter.className = 'waifu-selector__stat-meter';
+      meter.setAttribute('aria-hidden', 'true');
+      const fill = document.createElement('span');
+      fill.className = 'waifu-selector__stat-fill';
+      const clamped = Math.max(0, Math.min(10, value));
+      fill.style.width = `${(clamped / 10) * 100}%`;
+      meter.appendChild(fill);
+
+      const valueText = document.createElement('span');
+      valueText.className = 'waifu-selector__stat-value';
+      valueText.textContent = `${clamped}/10`;
+
+      const srText = document.createElement('span');
+      srText.className = 'sr-only';
+      srText.textContent = `${label} ${clamped} out of 10`;
+
+      statRow.appendChild(labelElement);
+      statRow.appendChild(meter);
+      statRow.appendChild(valueText);
+      statRow.appendChild(srText);
+      stats.appendChild(statRow);
+    });
     content.appendChild(name);
     content.appendChild(series);
     content.appendChild(meta);
     content.appendChild(traits);
+    if (stats.childElementCount > 0) {
+      content.appendChild(stats);
+    }
     card.appendChild(content);
 
     this.waifuPreview.appendChild(card);
@@ -1034,6 +1121,23 @@ class AniRankerApp {
     direction.appendChild(directionButton);
     controls.appendChild(direction);
 
+    const favoritesToggle = document.createElement('button');
+    favoritesToggle.type = 'button';
+    favoritesToggle.className = this.state.favoritesOnly
+      ? 'waifu-selector__favorites-toggle waifu-selector__favorites-toggle--active'
+      : 'waifu-selector__favorites-toggle';
+    favoritesToggle.setAttribute('aria-pressed', this.state.favoritesOnly ? 'true' : 'false');
+    const favoriteIcon = this.state.favoritesOnly
+      ? Icons.StarSolid({ 'aria-hidden': 'true' })
+      : Icons.Star({ 'aria-hidden': 'true' });
+    favoriteIcon.classList.add('waifu-selector__favorites-icon');
+    const favoriteLabel = document.createElement('span');
+    favoriteLabel.textContent = 'Favorites only';
+    favoritesToggle.appendChild(favoriteIcon);
+    favoritesToggle.appendChild(favoriteLabel);
+    favoritesToggle.addEventListener('click', () => this.toggleFavoritesOnly());
+    controls.appendChild(favoritesToggle);
+
     this.waifuFiltersContainer.appendChild(controls);
 
     const traitSections = [
@@ -1045,14 +1149,21 @@ class AniRankerApp {
         onClear: () => this.clearFilterValues('waifuTraitFilters'),
       },
       {
-        label: 'Hair',
+        label: 'Hair color',
         items: this.waifuHairColors,
         active: this.state.waifuHairFilters,
         onToggle: (value) => this.toggleFilterValue('waifuHairFilters', value),
         onClear: () => this.clearFilterValues('waifuHairFilters'),
       },
       {
-        label: 'Skin',
+        label: 'Eye color',
+        items: this.waifuEyeColors,
+        active: this.state.waifuEyeFilters,
+        onToggle: (value) => this.toggleFilterValue('waifuEyeFilters', value),
+        onClear: () => this.clearFilterValues('waifuEyeFilters'),
+      },
+      {
+        label: 'Complexion',
         items: this.waifuSkinTones,
         active: this.state.waifuSkinFilters,
         onToggle: (value) => this.toggleFilterValue('waifuSkinFilters', value),
@@ -1108,30 +1219,23 @@ class AniRankerApp {
     const filtersActive =
       this.state.waifuTraitFilters.length > 0 ||
       this.state.waifuHairFilters.length > 0 ||
+      this.state.waifuEyeFilters.length > 0 ||
       this.state.waifuSkinFilters.length > 0 ||
-      this.state.waifuChestFilters.length > 0;
+      this.state.waifuChestFilters.length > 0 ||
+      this.state.favoritesOnly;
+    const favorites = this.getFavoriteWaifuSet();
 
     this.waifuGallery.innerHTML = '';
     visible.forEach((waifu) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className =
-        'waifu-pill' + (this.state.waifuSelection === waifu.name ? ' waifu-pill--active' : '');
-      const strong = document.createElement('strong');
-      strong.textContent = waifu.name;
-      const title = document.createElement('span');
-      title.textContent = waifu.animeTitle;
-      const attributeLabel = WAIFU_ATTRIBUTE_LABELS[this.state.waifuSortKey] || 'Score';
-      const value = typeof waifu[this.state.waifuSortKey] === 'number' ? waifu[this.state.waifuSortKey] : null;
-      const metricText = value != null ? `${attributeLabel} ${value}/10` : waifu.animeTitle;
-      const metric = document.createElement('span');
-      metric.className = 'waifu-pill__metric';
-      metric.textContent = metricText;
-      button.appendChild(strong);
-      button.appendChild(title);
-      button.appendChild(metric);
-      button.addEventListener('click', () => this.handleWaifuSelect(waifu.name));
-      this.waifuGallery.appendChild(button);
+      const pill = this.createWaifuPill(waifu, {
+        active: this.state.waifuSelection === waifu.name,
+        attributeKey: this.state.waifuSortKey,
+        isFavorite: favorites.has(waifu.name),
+        showFavoriteToggle: true,
+        onSelect: () => this.handleWaifuSelect(waifu.name),
+        onToggleFavorite: () => this.toggleFavoriteWaifu(waifu.name),
+      });
+      this.waifuGallery.appendChild(pill);
     });
 
     if (filtered.length > 0 && visible.length === 0) {
@@ -1521,25 +1625,16 @@ class AniRankerApp {
         list.className = 'detail-modal__waifu-list';
         const attributeKey = this.state.waifuSortKey;
         const attributeLabel = WAIFU_ATTRIBUTE_LABELS[attributeKey] || 'Score';
+        const favorites = this.getFavoriteWaifuSet();
         detailWaifus.forEach((waifu) => {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className =
-            'waifu-pill' + (this.state.waifuSelection === waifu.name ? ' waifu-pill--active' : '');
-          const name = document.createElement('strong');
-          name.textContent = waifu.name;
-          const animeTitle = document.createElement('span');
-          animeTitle.textContent = waifu.animeTitle;
-          const value = typeof waifu[attributeKey] === 'number' ? waifu[attributeKey] : null;
-          const metricText = value != null ? `${attributeLabel} ${value}/10` : waifu.animeTitle;
-          const metric = document.createElement('span');
-          metric.className = 'waifu-pill__metric';
-          metric.textContent = metricText;
-          button.appendChild(name);
-          button.appendChild(animeTitle);
-          button.appendChild(metric);
-          button.addEventListener('click', () => this.handleWaifuSelect(waifu.name));
-          list.appendChild(button);
+          const pill = this.createWaifuPill(waifu, {
+            active: this.state.waifuSelection === waifu.name,
+            attributeKey,
+            attributeLabel,
+            isFavorite: favorites.has(waifu.name),
+            onSelect: () => this.handleWaifuSelect(waifu.name),
+          });
+          list.appendChild(pill);
         });
         waifuSection.appendChild(label);
         waifuSection.appendChild(list);
@@ -1561,6 +1656,126 @@ class AniRankerApp {
     }
     const option = COLLECTION_STATUS_OPTIONS.find((item) => item.value === value);
     return option ? option.label : value;
+  }
+
+  getFavoriteWaifuSet() {
+    const list = Array.isArray(this.state.favoriteWaifus) ? this.state.favoriteWaifus : [];
+    return new Set(list);
+  }
+
+  toggleFavoriteWaifu(name) {
+    if (typeof name !== 'string' || name.length === 0) {
+      return;
+    }
+    const favorites = this.getFavoriteWaifuSet();
+    if (favorites.has(name)) {
+      favorites.delete(name);
+    } else {
+      favorites.add(name);
+    }
+    const ordered = WAIFUS.filter((item) => favorites.has(item.name)).map((item) => item.name);
+    this.updatePreferences({ favoriteWaifus: ordered });
+  }
+
+  toggleFavoritesOnly() {
+    this.updatePreferences({ favoritesOnly: !this.state.favoritesOnly });
+  }
+
+  createWaifuPill(
+    waifu,
+    {
+      active = false,
+      attributeKey = this.state.waifuSortKey,
+      attributeLabel = WAIFU_ATTRIBUTE_LABELS[attributeKey] || 'Score',
+      isFavorite = false,
+      onSelect,
+      onToggleFavorite,
+      showFavoriteToggle = false,
+    } = {}
+  ) {
+    const pill = document.createElement('div');
+    pill.className = 'waifu-pill';
+    if (active) {
+      pill.classList.add('waifu-pill--active');
+    }
+    if (isFavorite) {
+      pill.classList.add('waifu-pill--favorite');
+    }
+    pill.setAttribute('role', 'button');
+    pill.setAttribute('aria-pressed', active ? 'true' : 'false');
+    pill.tabIndex = 0;
+
+    const body = document.createElement('div');
+    body.className = 'waifu-pill__body';
+
+    const name = document.createElement('strong');
+    name.textContent = waifu.name;
+
+    const title = document.createElement('span');
+    title.textContent = waifu.animeTitle;
+
+    const value = typeof waifu[attributeKey] === 'number' ? waifu[attributeKey] : null;
+    const metricText = value != null ? `${attributeLabel} ${value}/10` : waifu.animeTitle;
+    const metric = document.createElement('span');
+    metric.className = 'waifu-pill__metric';
+    metric.textContent = metricText;
+
+    body.appendChild(name);
+    body.appendChild(title);
+    body.appendChild(metric);
+    pill.appendChild(body);
+
+    const handleSelect = () => {
+      if (typeof onSelect === 'function') {
+        onSelect();
+      }
+    };
+
+    pill.addEventListener('click', (event) => {
+      const target = event.target;
+      if (
+        showFavoriteToggle &&
+        target instanceof Element &&
+        target.closest('.waifu-pill__favorite')
+      ) {
+        return;
+      }
+      handleSelect();
+    });
+
+    pill.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        handleSelect();
+      }
+    });
+
+    if (showFavoriteToggle) {
+      const favoriteButton = document.createElement('button');
+      favoriteButton.type = 'button';
+      favoriteButton.className = isFavorite
+        ? 'waifu-pill__favorite waifu-pill__favorite--active'
+        : 'waifu-pill__favorite';
+      favoriteButton.setAttribute(
+        'aria-label',
+        isFavorite ? `Remove ${waifu.name} from favorites` : `Add ${waifu.name} to favorites`
+      );
+      favoriteButton.setAttribute('aria-pressed', isFavorite ? 'true' : 'false');
+      const icon = isFavorite
+        ? Icons.StarSolid({ 'aria-hidden': 'true' })
+        : Icons.Star({ 'aria-hidden': 'true' });
+      favoriteButton.appendChild(icon);
+      favoriteButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        if (typeof onToggleFavorite === 'function') {
+          onToggleFavorite();
+        }
+      });
+      pill.appendChild(favoriteButton);
+    }
+
+    return pill;
   }
 
   toggleFilterValue(key, value) {
