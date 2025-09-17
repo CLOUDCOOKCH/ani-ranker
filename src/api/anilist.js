@@ -61,10 +61,6 @@ export async function searchAnime(query, options = {}) {
   const normalizedQuery = normalize(query ? query.trim() : '');
   const requestedGenres = Array.isArray(options.genres) ? options.genres : [];
   const requestedStatuses = Array.isArray(options.statuses) ? options.statuses : [];
-  const page = options.page && options.page > 0 ? options.page : 1;
-  const perPage = options.perPage && options.perPage > 0 ? options.perPage : 20;
-  const start = (page - 1) * perPage;
-  const end = start + perPage;
 
   const filtered = ANIME.filter(
     (item) =>
@@ -73,7 +69,14 @@ export async function searchAnime(query, options = {}) {
       matchesStatuses(item, requestedStatuses)
   );
 
-  return filtered.slice(start, end).map(cloneAnime);
+  return filtered
+    .slice()
+    .sort((first, second) => {
+      const left = first && first.popularity != null ? first.popularity : 0;
+      const right = second && second.popularity != null ? second.popularity : 0;
+      return right - left;
+    })
+    .map(cloneAnime);
 }
 
 export async function getAnimeById(id) {
