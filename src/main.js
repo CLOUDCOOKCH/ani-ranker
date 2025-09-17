@@ -131,6 +131,8 @@ const THEME_PRESETS = [
   },
 ];
 
+const COLLECTION_STATUS_STORAGE_KEY = 'ani-ranker-collection-statuses';
+
 const COLLECTION_STATUS_OPTIONS = [
   { value: '', label: 'No status' },
   { value: 'planning', label: 'Planning' },
@@ -139,6 +141,38 @@ const COLLECTION_STATUS_OPTIONS = [
   { value: 'on-hold', label: 'On hold' },
   { value: 'dropped', label: 'Dropped' },
 ];
+
+function getValidCollectionStatuses() {
+  return new Set(COLLECTION_STATUS_OPTIONS.filter((option) => option.value).map((option) => option.value));
+}
+
+function sanitizeCollectionStatusMap(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {};
+  }
+  const validStatuses = getValidCollectionStatuses();
+  const sanitized = {};
+  Object.entries(input).forEach(([key, value]) => {
+    if (typeof value === 'string' && validStatuses.has(value)) {
+      sanitized[key] = value;
+    }
+  });
+  return sanitized;
+}
+
+function loadStoredCollectionStatuses() {
+  try {
+    const stored = window.localStorage.getItem(COLLECTION_STATUS_STORAGE_KEY);
+    if (!stored) {
+      return {};
+    }
+    const parsed = JSON.parse(stored);
+    return sanitizeCollectionStatusMap(parsed);
+  } catch (error) {
+    console.warn('Unable to restore saved collection statuses', error);
+    return {};
+  }
+}
 
 class AniRankerApp {
   constructor(rootElement) {
@@ -204,7 +238,10 @@ class AniRankerApp {
     }
 
     this.restoreRatings();
-    this.restoreCollectionStatuses();
+    const restoredCollectionStatuses = loadStoredCollectionStatuses();
+    if (restoredCollectionStatuses && Object.keys(restoredCollectionStatuses).length > 0) {
+      this.state.collectionStatuses = restoredCollectionStatuses;
+    }
     this.createLayout();
     this.applyTheme(this.state.activeTheme);
     this.render();
@@ -245,47 +282,18 @@ class AniRankerApp {
     }
   }
 
-  restoreCollectionStatuses() {
-    try {
-      const stored = window.localStorage.getItem('ani-ranker-collection-statuses');
-      if (!stored) {
-        return;
-      }
-      const parsed = JSON.parse(stored);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return;
-      }
-      const validStatuses = new Set(
-        COLLECTION_STATUS_OPTIONS.filter((option) => option.value).map((option) => option.value)
-      );
-      const sanitized = {};
-      Object.entries(parsed).forEach(([key, value]) => {
-        if (typeof value === 'string' && validStatuses.has(value)) {
-          sanitized[key] = value;
-        }
-      });
-      this.state.collectionStatuses = sanitized;
-    } catch (error) {
-      console.warn('Unable to restore saved collection statuses', error);
-    }
-  }
-
   saveCollectionStatuses(statuses) {
     try {
       if (!statuses || typeof statuses !== 'object' || Array.isArray(statuses)) {
-        window.localStorage.removeItem('ani-ranker-collection-statuses');
+        window.localStorage.removeItem(COLLECTION_STATUS_STORAGE_KEY);
         return;
       }
-      const validStatuses = new Set(
-        COLLECTION_STATUS_OPTIONS.filter((option) => option.value).map((option) => option.value)
-      );
-      const sanitized = {};
-      Object.entries(statuses).forEach(([key, value]) => {
-        if (typeof value === 'string' && validStatuses.has(value)) {
-          sanitized[key] = value;
-        }
-      });
-      window.localStorage.setItem('ani-ranker-collection-statuses', JSON.stringify(sanitized));
+      const sanitized = sanitizeCollectionStatusMap(statuses);
+      if (Object.keys(sanitized).length === 0) {
+        window.localStorage.removeItem(COLLECTION_STATUS_STORAGE_KEY);
+        return;
+      }
+      window.localStorage.setItem(COLLECTION_STATUS_STORAGE_KEY, JSON.stringify(sanitized));
     } catch (error) {
       console.warn('Failed to persist collection statuses', error);
     }
