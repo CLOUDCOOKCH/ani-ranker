@@ -101,6 +101,18 @@ a {
   text-decoration: none;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .app {
   max-width: 1160px;
   margin: 0 auto;
@@ -478,7 +490,7 @@ a {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.65rem;
 }
 
 .waifu-selector__preview-content h3 {
@@ -499,7 +511,6 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
-  margin-top: auto;
 }
 
 .waifu-selector__preview-traits span {
@@ -509,6 +520,47 @@ a {
   border: 1px solid rgba(22, 27, 34, 0.08);
   font-size: 0.75rem;
   letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.waifu-selector__preview-stats {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.waifu-selector__stat {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.waifu-selector__stat-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.waifu-selector__stat-meter {
+  position: relative;
+  height: 6px;
+  background: color-mix(in srgb, var(--surface-muted) 82%, rgba(22, 27, 34, 0.1) 18%);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.waifu-selector__stat-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--accent) 85%, var(--accent-soft) 15%);
+  border-radius: inherit;
+  transition: width 0.35s ease;
+}
+
+.waifu-selector__stat-value {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -589,6 +641,48 @@ a {
   box-shadow: var(--shadow-sharp);
 }
 
+.waifu-selector__favorites-toggle {
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.waifu-selector__favorites-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.waifu-selector__favorites-icon {
+  color: inherit;
+}
+
+.waifu-selector__favorites-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text-main);
+  box-shadow: var(--shadow-sharp);
+}
+
+.waifu-selector__favorites-toggle--active {
+  background: color-mix(in srgb, var(--accent-soft) 80%, transparent 20%);
+  border-color: var(--accent);
+  color: var(--text-main);
+  box-shadow: var(--shadow-sharp);
+}
+
+.waifu-selector__favorites-toggle--active .waifu-selector__favorites-icon {
+  color: var(--accent);
+}
+
 .waifu-selector__traits {
   display: flex;
   flex-direction: column;
@@ -661,8 +755,9 @@ a {
   color: var(--text-main);
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.55rem 1.1rem;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem 0.55rem 1.1rem;
+  justify-content: space-between;
   font-size: 0.9rem;
   cursor: pointer;
   transition: transform 0.3s ease, background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, color 0.35s ease;
@@ -685,6 +780,58 @@ a {
   text-transform: uppercase;
 }
 
+.waifu-pill__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.waifu-pill__body span,
+.waifu-pill__body .waifu-pill__metric {
+  white-space: nowrap;
+}
+
+.waifu-pill__favorite {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0.3rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.25s ease, background 0.25s ease, transform 0.25s ease;
+  flex-shrink: 0;
+}
+
+.waifu-pill__favorite svg {
+  width: 18px;
+  height: 18px;
+}
+
+.waifu-pill__favorite:hover,
+.waifu-pill__favorite:focus-visible {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 60%, transparent 40%);
+  outline: none;
+}
+
+.waifu-pill__favorite--active {
+  color: var(--accent);
+}
+
+.waifu-pill--favorite {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border) 55%);
+  box-shadow: var(--shadow-sharp);
+}
+
+.waifu-pill:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
 .waifu-pill:hover {
   border-color: var(--accent);
   box-shadow: var(--shadow-sharp);
@@ -702,6 +849,14 @@ a {
 .waifu-pill--active span,
 .waifu-pill--active .waifu-pill__metric {
   color: rgba(255, 255, 255, 0.75);
+}
+
+.waifu-pill--active .waifu-pill__favorite {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.waifu-pill--active .waifu-pill__favorite--active {
+  color: var(--accent);
 }
 
 button.waifu-pill {
